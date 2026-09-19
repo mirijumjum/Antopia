@@ -9,16 +9,7 @@ namespace ProjectBootstrap
     // Installs a fixed set of packages via the PackageManager Client API, headless-safe.
     public static class PackageInstaller
     {
-        static readonly string[] PackagesToAdd =
-        {
-            "com.unity.cinemachine",
-            "com.unity.purchasing",
-            "com.unity.services.levelplay",
-            "com.unity.services.core",
-            "com.unity.services.authentication",
-            "com.unity.services.cloudsave",
-            "com.unity.services.cloudcode",
-        };
+        static readonly string[] PackagesToAdd = { };
 
         static readonly string[] PackagesToRemove = { };
 
