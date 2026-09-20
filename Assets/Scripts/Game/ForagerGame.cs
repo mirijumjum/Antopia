@@ -92,7 +92,7 @@ namespace Antopia
             _matTwig = Resources.Load<Material>("Materials/Twig");
             _world = new GameObject("ForagerWorld").transform;
 
-            _ant = AntModel.Create("PlayerAnt", AntModel.Red, _world);
+            _ant = AntModel.Create("PlayerAnt", AntRoles.All[AntRoles.Obrera].Variant, _world);
             _ant.localScale = Vector3.one * 0.9f;
             _ant.position = NestView.NestEntrance + new Vector3(0f, 0f, -(DeliverRadius + 0.2f));
             _run = new AntRunner(_ant, Game.ForageSpeedMultiplier);

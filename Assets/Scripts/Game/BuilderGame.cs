@@ -71,7 +71,7 @@ namespace Antopia
         {
             _world = new GameObject("BuilderWorld").transform;
 
-            _ant = AntModel.Create("BuilderAnt", AntModel.Black, _world);
+            _ant = AntModel.Create("BuilderAnt", AntRoles.All[AntRoles.Constructora].Variant, _world);
             _ant.localScale = Vector3.one * 0.9f;
             _ant.position = NestView.NestEntrance + new Vector3(0f, 0f, -(DeliverRadius + 0.2f));
             _run = new AntRunner(_ant);

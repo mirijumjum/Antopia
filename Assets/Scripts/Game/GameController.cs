@@ -9,7 +9,7 @@ namespace Antopia
     {
         RectTransform _safe, _actions;
         Text _coins, _leaves, _twigs, _pieces, _ants, _toast;
-        Button _dailyBtn, _buildBtn, _sellBtn;
+        Button _dailyBtn, _playBtn, _sellBtn;
         GameObject _overlay;
         Action<RectTransform> _overlayBuild;
         float _toastUntil;
@@ -82,8 +82,8 @@ namespace Antopia
             _toast.gameObject.SetActive(false);
 
             _actions = UiKit.Rect(_safe, "Actions", 0f, 0f, 1f, 1f);
-            UiKit.MakeButton(_actions, "OBRERA\nrecolectar", UiKit.Leaf, 46, OpenForager, 0.03f, 0.14f, 0.49f, 0.27f);
-            _buildBtn = UiKit.MakeButton(_actions, "", UiKit.Twig, 46, OpenBuilder, 0.51f, 0.14f, 0.97f, 0.27f);
+            _playBtn = UiKit.MakeButton(_actions, "", UiKit.Leaf, 46, PlaySelectedRole, 0.03f, 0.14f, 0.66f, 0.27f);
+            UiKit.MakeButton(_actions, "Hormigas\n(cambiar rol)", UiKit.Cream, 42, OpenRoles, 0.68f, 0.14f, 0.97f, 0.27f);
             UiKit.MakeButton(_actions, "Nido\n(mejoras)", UiKit.Cream, 42, OpenNest, 0.03f, 0.01f, 0.34f, 0.13f);
             _dailyBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, OpenDaily, 0.35f, 0.01f, 0.66f, 0.13f);
             _sellBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, () =>
@@ -102,7 +102,11 @@ namespace Antopia
             _twigs.text = $"Ramas\n{d.twigs}";
             _pieces.text = $"Piezas\n{d.pieces}";
             _ants.text = $"Hormigas pasivas: {Game.Ants}   Hoja = {Game.LeafPrice} mon.";
-            UiKit.SetButtonText(_buildBtn, $"CONSTRUCTORA\nconstruir ({Game.BuildTwigCost} ramas)");
+            var role = AntRoles.All[d.role];
+            ((Image)_playBtn.targetGraphic).color = role.Ui;
+            UiKit.SetButtonText(_playBtn, d.role == AntRoles.Constructora
+                ? $"JUGAR: {role.Name}\nconstruir ({Game.BuildTwigCost} ramas)"
+                : $"JUGAR: {role.Name}\n{(role.HasGame ? role.Verb : "modo de prueba")}");
             int pending = Game.DailyPending();
             UiKit.SetButtonText(_dailyBtn, pending > 0 ? $"Diarias\n(!) {pending} listas" : "Diarias");
             UiKit.SetButtonText(_sellBtn, $"Vender\nhojas ({d.leaves * Game.LeafPrice})");
@@ -114,6 +118,33 @@ namespace Antopia
             _toast.text = msg;
             _toast.gameObject.SetActive(true);
             _toastUntil = Time.time + seconds;
+        }
+
+        // ---------------- Roles ----------------
+        void PlayRole(int role)
+        {
+            switch (role)
+            {
+                case AntRoles.Obrera: OpenForager(); break;
+                case AntRoles.Constructora: OpenBuilder(); break;
+                default: OpenRoam(role); break;
+            }
+        }
+
+        void PlaySelectedRole() => PlayRole(Game.Data.role);
+
+        void OpenRoles()
+        {
+            CloseOverlay();
+            _actions.gameObject.SetActive(false);
+            RoleScreen.Open(_safe, PlayRole, () => _actions.gameObject.SetActive(true));
+        }
+
+        void OpenRoam(int role)
+        {
+            CloseOverlay();
+            _actions.gameObject.SetActive(false);
+            RoamGame.Open(_safe, role, () => _actions.gameObject.SetActive(true));
         }
 
         // ---------------- Minijuegos ----------------

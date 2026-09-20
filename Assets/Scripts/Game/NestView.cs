@@ -26,7 +26,7 @@ namespace Antopia
         readonly Transform[] _buildings = new Transform[3];
         readonly List<Ant> _ants = new List<Ant>();
         readonly List<Vector3> _spots = new List<Vector3>();
-        static readonly int[] PassiveVariants = { AntModel.Brown, AntModel.Green, AntModel.Black };
+        static readonly int[] PassiveVariants = { AntRoles.All[AntRoles.Obrera].Variant }; // las pasivas son obreras
         const float AntSpeed = 1.7f;
 
         void Start()

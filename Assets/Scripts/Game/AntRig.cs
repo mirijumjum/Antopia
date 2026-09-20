@@ -10,6 +10,7 @@ namespace Antopia
 
         Transform[] _legs;
         float[] _sides, _baseYaw, _phaseOffset, _hipY;
+        public float ForcedSpeed = -1f; // >= 0: ignora el desplazamiento real (para escaparates)
         Vector3 _last;
         float _phase;
 
@@ -30,7 +31,7 @@ namespace Antopia
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
             var p = transform.position;
-            float speed = Mathf.Min(Vector3.Distance(p, _last) / dt / transform.lossyScale.x, 12f);
+            float speed = ForcedSpeed >= 0f ? ForcedSpeed : Mathf.Min(Vector3.Distance(p, _last) / dt / transform.lossyScale.x, 12f);
             _last = p;
 
             _phase += speed * 2.2f * dt;

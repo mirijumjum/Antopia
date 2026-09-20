@@ -9,6 +9,7 @@ namespace Antopia
         public int leaves, twigs, coins, pieces;
         public int[] buildingLevels = new int[3];
         public int[] forageLevels = new int[4];
+        public int role; // indice en AntRoles.All
         public string dayKey = "";
         public int dailyForages, dailyPieces, dailyUpgrades;
         public bool[] dailyClaimed = new bool[3];
@@ -54,6 +55,7 @@ namespace Antopia
             }
             if (Data.buildingLevels == null || Data.buildingLevels.Length != 3) Data.buildingLevels = new int[3];
             if (Data.forageLevels == null || Data.forageLevels.Length != 4) Data.forageLevels = new int[4];
+            Data.role = Mathf.Clamp(Data.role, 0, AntRoles.All.Length - 1);
             if (Data.dailyClaimed == null || Data.dailyClaimed.Length != 3) Data.dailyClaimed = new bool[3];
 
             ApplyOfflineIncome();
@@ -92,6 +94,14 @@ namespace Antopia
                 case 1: return $"{1 + l} hormigas pasivas (siguiente {2 + l})";
                 default: return $"Cada hoja vale {1 + l} monedas (siguiente {2 + l})";
             }
+        }
+
+        public static void SetRole(int role)
+        {
+            role = Mathf.Clamp(role, 0, AntRoles.All.Length - 1);
+            if (Data.role == role) return;
+            Data.role = role;
+            Notify();
         }
 
         // ---- Mejoras de la obrera (cuestan monedas y ramas) ----
