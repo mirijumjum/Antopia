@@ -7,7 +7,7 @@ namespace Antopia
     // Punto de entrada: monta la escena, el HUD y los paneles. Se crea desde una escena casi vacia.
     public class GameController : MonoBehaviour
     {
-        RectTransform _safe;
+        RectTransform _safe, _actions;
         Text _coins, _leaves, _twigs, _pieces, _ants, _toast;
         Button _dailyBtn, _buildBtn, _sellBtn;
         GameObject _overlay;
@@ -81,11 +81,12 @@ namespace Antopia
             _toast = UiKit.Label(toastBg.transform, "", 36, TextAnchor.MiddleCenter, UiKit.Cream, 0.02f, 0f, 0.98f, 1f);
             _toast.gameObject.SetActive(false);
 
-            UiKit.MakeButton(_safe, "OBRERA\nrecolectar", UiKit.Leaf, 46, OpenForager, 0.03f, 0.14f, 0.49f, 0.27f);
-            _buildBtn = UiKit.MakeButton(_safe, "", UiKit.Twig, 46, OpenBuilder, 0.51f, 0.14f, 0.97f, 0.27f);
-            UiKit.MakeButton(_safe, "Nido\n(mejoras)", UiKit.Cream, 42, OpenNest, 0.03f, 0.01f, 0.34f, 0.13f);
-            _dailyBtn = UiKit.MakeButton(_safe, "", UiKit.Gold, 42, OpenDaily, 0.35f, 0.01f, 0.66f, 0.13f);
-            _sellBtn = UiKit.MakeButton(_safe, "", UiKit.Gold, 42, () =>
+            _actions = UiKit.Rect(_safe, "Actions", 0f, 0f, 1f, 1f);
+            UiKit.MakeButton(_actions, "OBRERA\nrecolectar", UiKit.Leaf, 46, OpenForager, 0.03f, 0.14f, 0.49f, 0.27f);
+            _buildBtn = UiKit.MakeButton(_actions, "", UiKit.Twig, 46, OpenBuilder, 0.51f, 0.14f, 0.97f, 0.27f);
+            UiKit.MakeButton(_actions, "Nido\n(mejoras)", UiKit.Cream, 42, OpenNest, 0.03f, 0.01f, 0.34f, 0.13f);
+            _dailyBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, OpenDaily, 0.35f, 0.01f, 0.66f, 0.13f);
+            _sellBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, () =>
             {
                 int gain = Game.Data.leaves * Game.LeafPrice;
                 Game.SellLeaves();
@@ -119,7 +120,12 @@ namespace Antopia
         void OpenForager()
         {
             CloseOverlay();
-            ForagerGame.Open(_safe, () => Toast("Recolecta completada", 3f));
+            _actions.gameObject.SetActive(false); // deja ver el mundo durante la expedicion
+            ForagerGame.Open(_safe, () =>
+            {
+                _actions.gameObject.SetActive(true);
+                Toast("Expedicion terminada", 3f);
+            });
         }
 
         void OpenBuilder()
@@ -130,7 +136,12 @@ namespace Antopia
                 Toast($"Necesitas {Game.BuildTwigCost} ramas. Recolectalas con la obrera.", 4f);
                 return;
             }
-            BuilderGame.Open(_safe, () => Toast("Obra completada", 3f));
+            _actions.gameObject.SetActive(false);
+            BuilderGame.Open(_safe, () =>
+            {
+                _actions.gameObject.SetActive(true);
+                Toast("Obra completada", 3f);
+            });
         }
 
         // ---------------- Paneles ----------------
@@ -156,33 +167,67 @@ namespace Antopia
             _overlayBuild = null;
         }
 
-        void OpenNest()
+        void OpenNest() => OpenNest(0);
+
+        // tab 0 = edificios del nido (monedas + piezas), tab 1 = mejoras de la obrera (monedas + ramas).
+        void OpenNest(int tab)
         {
             OpenOverlay(rt =>
             {
-                UiKit.Label(rt, "NIDO: mejoras", 60, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.90f, 0.95f, 0.99f);
-                UiKit.Label(rt, "Cuestan monedas (vende hojas) y piezas (la constructora las hace).",
+                UiKit.MakeButton(rt, "Edificios", tab == 0 ? UiKit.Gold : UiKit.Disabled, 46, () => OpenNest(0), 0.04f, 0.90f, 0.49f, 0.99f);
+                UiKit.MakeButton(rt, "Obrera", tab == 1 ? UiKit.Gold : UiKit.Disabled, 46, () => OpenNest(1), 0.51f, 0.90f, 0.96f, 0.99f);
+                UiKit.Label(rt, tab == 0
+                        ? "Cuestan monedas (vende hojas) y piezas (la constructora las hace)."
+                        : "Cuestan monedas y ramas. Mejoran la expedicion de la obrera.",
                     34, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.85f, 0.95f, 0.90f);
-                for (int i = 0; i < 3; i++)
-                {
-                    int b = i;
-                    float top = 0.83f - i * 0.24f;
-                    var row = UiKit.Box(rt, "Row", new Color(1f, 1f, 1f, 0.08f), 0.04f, top - 0.22f, 0.96f, top);
-                    int lvl = Game.Data.buildingLevels[b];
-                    UiKit.Label(row.transform, $"{Game.BuildingNames[b]}  (nivel {lvl}/{Game.MaxLevel})", 46,
-                        TextAnchor.MiddleLeft, UiKit.Gold, 0.04f, 0.62f, 0.96f, 0.98f);
-                    UiKit.Label(row.transform, Game.BuildingEffect(b), 34, TextAnchor.MiddleLeft, UiKit.Cream,
-                        0.04f, 0.38f, 0.96f, 0.64f);
-                    bool max = lvl >= Game.MaxLevel;
-                    string cost = max ? "Nivel maximo" : $"Mejorar: {Game.UpgradeCoinCost(b)} mon. + {Game.UpgradePieceCost(b)} piezas";
-                    var btn = UiKit.MakeButton(row.transform, cost, Game.CanUpgrade(b) ? UiKit.Gold : UiKit.Disabled, 36, () =>
-                    {
-                        if (Game.TryUpgrade(b)) Toast($"{Game.BuildingNames[b]} sube de nivel", 3f);
-                        else Toast("Te faltan monedas o piezas", 3f);
-                    }, 0.04f, 0.04f, 0.96f, 0.36f);
-                }
+                if (tab == 0) BuildBuildingRows(rt);
+                else BuildForageRows(rt);
                 UiKit.MakeButton(rt, "Cerrar", UiKit.Cream, 46, CloseOverlay, 0.3f, 0.02f, 0.7f, 0.10f);
             });
+        }
+
+        void BuildBuildingRows(RectTransform rt)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                int b = i;
+                float top = 0.83f - i * 0.24f;
+                var row = UiKit.Box(rt, "Row", new Color(1f, 1f, 1f, 0.08f), 0.04f, top - 0.22f, 0.96f, top);
+                int lvl = Game.Data.buildingLevels[b];
+                UiKit.Label(row.transform, $"{Game.BuildingNames[b]}  (nivel {lvl}/{Game.MaxLevel})", 46,
+                    TextAnchor.MiddleLeft, UiKit.Gold, 0.04f, 0.62f, 0.96f, 0.98f);
+                UiKit.Label(row.transform, Game.BuildingEffect(b), 34, TextAnchor.MiddleLeft, UiKit.Cream,
+                    0.04f, 0.38f, 0.96f, 0.64f);
+                bool max = lvl >= Game.MaxLevel;
+                string cost = max ? "Nivel maximo" : $"Mejorar: {Game.UpgradeCoinCost(b)} mon. + {Game.UpgradePieceCost(b)} piezas";
+                UiKit.MakeButton(row.transform, cost, Game.CanUpgrade(b) ? UiKit.Gold : UiKit.Disabled, 36, () =>
+                {
+                    if (Game.TryUpgrade(b)) Toast($"{Game.BuildingNames[b]} sube de nivel", 3f);
+                    else Toast("Te faltan monedas o piezas", 3f);
+                }, 0.04f, 0.04f, 0.96f, 0.36f);
+            }
+        }
+
+        void BuildForageRows(RectTransform rt)
+        {
+            for (int i = 0; i < Game.ForageUpgradeNames.Length; i++)
+            {
+                int u = i;
+                float top = 0.83f - i * 0.185f;
+                var row = UiKit.Box(rt, "Row", new Color(1f, 1f, 1f, 0.08f), 0.04f, top - 0.17f, 0.96f, top);
+                int lvl = Game.Data.forageLevels[u];
+                UiKit.Label(row.transform, $"{Game.ForageUpgradeNames[u]}  (nivel {lvl}/{Game.ForageMaxLevel})", 42,
+                    TextAnchor.MiddleLeft, UiKit.Gold, 0.04f, 0.64f, 0.96f, 0.98f);
+                UiKit.Label(row.transform, Game.ForageEffect(u), 32, TextAnchor.MiddleLeft, UiKit.Cream,
+                    0.04f, 0.36f, 0.96f, 0.64f);
+                bool max = lvl >= Game.ForageMaxLevel;
+                string cost = max ? "Nivel maximo" : $"Mejorar: {Game.ForageCoinCost(u)} mon. + {Game.ForageTwigCost(u)} ramas";
+                UiKit.MakeButton(row.transform, cost, Game.CanUpgradeForage(u) ? UiKit.Gold : UiKit.Disabled, 34, () =>
+                {
+                    if (Game.TryUpgradeForage(u)) Toast($"{Game.ForageUpgradeNames[u]} sube de nivel", 3f);
+                    else Toast("Te faltan monedas o ramas", 3f);
+                }, 0.04f, 0.03f, 0.96f, 0.34f);
+            }
         }
 
         void OpenDaily()

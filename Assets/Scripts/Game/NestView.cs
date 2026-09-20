@@ -14,8 +14,8 @@ namespace Antopia
             public bool carrying;
         }
 
-        static readonly Vector3 NestEntrance = new Vector3(0f, 0f, 0.5f);
-        static readonly Vector3[] BuildingPos =
+        internal static readonly Vector3 NestEntrance = new Vector3(0f, 0f, 0.5f);
+        internal static readonly Vector3[] BuildingPos =
         {
             new Vector3(-3.4f, 0f, -1.6f),
             new Vector3(3.4f, 0f, -1.6f),
@@ -26,6 +26,7 @@ namespace Antopia
         readonly Transform[] _buildings = new Transform[3];
         readonly List<Ant> _ants = new List<Ant>();
         readonly List<Vector3> _spots = new List<Vector3>();
+        static readonly int[] PassiveVariants = { AntModel.Brown, AntModel.Green, AntModel.Black };
         const float AntSpeed = 1.7f;
 
         void Start()
@@ -73,7 +74,7 @@ namespace Antopia
             cam.backgroundColor = new Color(0.55f, 0.78f, 0.9f);
         }
 
-        static GameObject Prim(PrimitiveType type, string name, Vector3 pos, Vector3 scale, string mat)
+        internal static GameObject Prim(PrimitiveType type, string name, Vector3 pos, Vector3 scale, string mat)
         {
             var go = GameObject.CreatePrimitive(type);
             go.name = name;
@@ -106,13 +107,15 @@ namespace Antopia
 
         Ant CreateAnt()
         {
-            var body = Prim(PrimitiveType.Sphere, "Ant", NestEntrance, new Vector3(0.4f, 0.3f, 0.6f), "Ant");
-            var load = Prim(PrimitiveType.Cube, "Load", Vector3.zero, new Vector3(0.35f, 0.06f, 0.35f), "Leaf");
-            load.transform.SetParent(body.transform, false);
-            load.transform.localPosition = new Vector3(0f, 1.1f, 0f);
-            load.transform.localScale = new Vector3(0.9f, 0.2f, 0.9f);
-            load.SetActive(false);
-            var ant = new Ant { t = body.transform, load = load.transform };
+            var body = AntModel.Create("Ant", PassiveVariants[_ants.Count % PassiveVariants.Length], null);
+            body.position = NestEntrance;
+            body.localScale = Vector3.one * 0.6f;
+            var load = Prim(PrimitiveType.Cube, "Load", Vector3.zero, Vector3.one, "Leaf").transform;
+            load.SetParent(body, false);
+            load.localPosition = AntModel.CargoBase;
+            load.localScale = new Vector3(0.5f, 0.1f, 0.4f);
+            load.gameObject.SetActive(false);
+            var ant = new Ant { t = body, load = load };
             PickSpot(ant);
             return ant;
         }
@@ -147,8 +150,7 @@ namespace Antopia
                 }
                 var dir = flat.normalized;
                 a.t.forward = Vector3.Lerp(a.t.forward, dir, 10f * Time.deltaTime);
-                float bob = Mathf.Sin(Time.time * 12f + a.t.GetInstanceID()) * 0.03f;
-                a.t.position = new Vector3(pos.x + dir.x * AntSpeed * Time.deltaTime, 0.15f + bob,
+                a.t.position = new Vector3(pos.x + dir.x * AntSpeed * Time.deltaTime, 0f,
                     pos.z + dir.z * AntSpeed * Time.deltaTime);
             }
         }
