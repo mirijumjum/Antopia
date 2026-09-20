@@ -82,16 +82,16 @@ namespace Antopia
             _toast.gameObject.SetActive(false);
 
             _actions = UiKit.Rect(_safe, "Actions", 0f, 0f, 1f, 1f);
-            _playBtn = UiKit.MakeButton(_actions, "", UiKit.Leaf, 46, PlaySelectedRole, 0.03f, 0.14f, 0.66f, 0.27f);
-            UiKit.MakeButton(_actions, "Hormigas\n(cambiar rol)", UiKit.Cream, 42, OpenRoles, 0.68f, 0.14f, 0.97f, 0.27f);
-            UiKit.MakeButton(_actions, "Nido\n(mejoras)", UiKit.Cream, 42, OpenNest, 0.03f, 0.01f, 0.34f, 0.13f);
-            _dailyBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, OpenDaily, 0.35f, 0.01f, 0.66f, 0.13f);
+            _playBtn = UiKit.MakeButton(_actions, "", UiKit.Leaf, 46, PlaySelectedRole, 0.03f, 0.14f, 0.66f, 0.27f, "Icon37");
+            UiKit.MakeButton(_actions, "Hormigas\n(cambiar rol)", UiKit.Cream, 42, OpenRoles, 0.68f, 0.14f, 0.97f, 0.27f, "Icon03");
+            UiKit.MakeButton(_actions, "Nido\n(mejoras)", UiKit.Cream, 42, OpenNest, 0.03f, 0.01f, 0.34f, 0.13f, "Icon02");
+            _dailyBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, OpenDaily, 0.35f, 0.01f, 0.66f, 0.13f, "Icon08");
             _sellBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, () =>
             {
                 int gain = Game.Data.leaves * Game.LeafPrice;
                 Game.SellLeaves();
                 if (gain > 0) Toast($"Vendiste hojas por {gain} monedas", 3f);
-            }, 0.67f, 0.01f, 0.97f, 0.13f);
+            }, 0.67f, 0.01f, 0.97f, 0.13f, "Icon54");
         }
 
         void RefreshHud()
@@ -103,7 +103,7 @@ namespace Antopia
             _pieces.text = $"Piezas\n{d.pieces}";
             _ants.text = $"Hormigas pasivas: {Game.Ants}   Hoja = {Game.LeafPrice} mon.";
             var role = AntRoles.All[d.role];
-            ((Image)_playBtn.targetGraphic).color = role.Ui;
+            UiKit.SetButtonColor(_playBtn, role.Ui);
             UiKit.SetButtonText(_playBtn, d.role == AntRoles.Constructora
                 ? $"JUGAR: {role.Name}\nconstruir ({Game.BuildTwigCost} ramas)"
                 : $"JUGAR: {role.Name}\n{(role.HasGame ? role.Verb : "modo de prueba")}");
@@ -187,7 +187,7 @@ namespace Antopia
             if (_overlay != null) Destroy(_overlay);
             var rt = UiKit.Rect(_safe, "Overlay", 0f, 0f, 1f, 0.915f);
             _overlay = rt.gameObject;
-            UiKit.Box(rt, "Bg", UiKit.Panel, 0, 0, 1, 1);
+            UiKit.Frame(rt, "Bg", UiKit.Skin.Orange, 0, 0, 1, 1);
             _overlayBuild(rt);
         }
 

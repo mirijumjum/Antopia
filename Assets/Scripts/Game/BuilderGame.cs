@@ -234,7 +234,7 @@ namespace Antopia
             string summary = _hits == Game.BuildAttempts
                 ? $"Perfecto: {Pieces} piezas (bonus +1)"
                 : $"Colocaste {Pieces} piezas de {Game.BuildAttempts}";
-            var panel = UiKit.Box(_root, "Result", UiKit.Panel, 0.05f, 0.30f, 0.95f, 0.74f);
+            var panel = UiKit.Frame(_root, "Result", UiKit.Skin.Orange, 0.05f, 0.30f, 0.95f, 0.74f);
             UiKit.Label(panel.transform, "Obra terminada", 54, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.72f, 0.95f, 0.98f);
             UiKit.Label(panel.transform, summary, 44, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.30f, 0.95f, 0.72f);
             UiKit.MakeButton(panel.transform, "Recoger", UiKit.Gold, 54, Finish, 0.25f, 0.05f, 0.75f, 0.26f);

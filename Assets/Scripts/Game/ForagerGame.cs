@@ -303,7 +303,7 @@ namespace Antopia
             int lost = _cargo.Count;
             string summary = $"{_trips} entregas en el nido\n+{_gotLeaves} hojas   +{_gotTwigs} ramas\n(incluye bonus de Despensa x{Game.HarvestMultiplier:0.00})";
             if (lost > 0) summary += $"\nSe perdio la carga que llevabas ({lost}).";
-            var panel = UiKit.Box(_root, "Result", UiKit.Panel, 0.05f, 0.30f, 0.95f, 0.74f);
+            var panel = UiKit.Frame(_root, "Result", UiKit.Skin.Green, 0.05f, 0.30f, 0.95f, 0.74f);
             UiKit.Label(panel.transform, "Expedicion terminada", 54, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.72f, 0.95f, 0.98f);
             UiKit.Label(panel.transform, summary, 40, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.30f, 0.95f, 0.72f);
             UiKit.MakeButton(panel.transform, "Volver", UiKit.Gold, 54, Finish, 0.25f, 0.05f, 0.75f, 0.26f);

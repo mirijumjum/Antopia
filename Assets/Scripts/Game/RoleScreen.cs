@@ -50,7 +50,7 @@ namespace Antopia
             _onPlay = onPlay;
             _onClose = onClose;
 
-            UiKit.Box(root, "Bg", UiKit.Panel, 0f, 0f, 1f, 1f);
+            UiKit.Frame(root, "Bg", UiKit.Skin.Cyan, 0f, 0f, 1f, 1f);
             UiKit.Label(root, "HORMIGAS: elige rol", 56, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.92f, 0.95f, 0.99f);
             UiKit.Label(root, "Cada color es un rol distinto. Toca una hormiga para elegirla.", 32, TextAnchor.MiddleCenter,
                 UiKit.Cream, 0.05f, 0.88f, 0.95f, 0.92f);
@@ -155,7 +155,7 @@ namespace Antopia
             _roleName.text = r.Name;
             _roleDesc.text = r.Description;
             UiKit.SetButtonText(_play, r.HasGame ? $"Jugar: {r.Verb}" : "Probar (en desarrollo)");
-            ((Image)_play.targetGraphic).color = r.Ui;
+            UiKit.SetButtonColor(_play, r.Ui);
         }
 
         void Update()
