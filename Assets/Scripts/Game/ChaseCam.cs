@@ -9,6 +9,7 @@ namespace Antopia
         readonly Vector3 _home;
         readonly Quaternion _homeRot;
         readonly float _homeFov;
+        Vector3 _shake;
         const float PlayFov = 47f; // un poco mas cerca que en el nido para ver mejor a la hormiga
 
         public ChaseCam()
@@ -26,7 +27,9 @@ namespace Antopia
             _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, PlayFov, 1f - Mathf.Exp(-4f * dt));
             float lim = AntRunner.WorldHalf - 4f;
             var target = new Vector3(Mathf.Clamp(pos.x, -lim, lim), 0f, Mathf.Clamp(pos.z, -lim, lim));
-            _cam.transform.position = Vector3.Lerp(_cam.transform.position, _home + target, 1f - Mathf.Exp(-6f * dt));
+            var shake = CamShake.Offset();
+            _cam.transform.position = Vector3.Lerp(_cam.transform.position - _shake, _home + target, 1f - Mathf.Exp(-6f * dt)) + shake;
+            _shake = shake;
         }
 
         public void Restore()

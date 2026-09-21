@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Antopia
@@ -10,6 +11,11 @@ namespace Antopia
         public int[] buildingLevels = new int[3];
         public int[] forageLevels = new int[4];
         public int role; // indice en AntRoles.All
+        public List<int> revealed = new List<int>(); // celdas de niebla ya destapadas
+        public bool[] poiFound = new bool[2];        // sitios de interes descubiertos
+        public bool guardDefeated, tunnelBuilt;      // caminos abiertos
+        public int questStep;                        // paso actual de la mision guiada
+        public int statPickups, statDeliveries, statHoney, statCrystals; // contadores para las misiones
         public string dayKey = "";
         public int dailyForages, dailyPieces, dailyUpgrades;
         public bool[] dailyClaimed = new bool[3];
@@ -56,6 +62,8 @@ namespace Antopia
             if (Data.buildingLevels == null || Data.buildingLevels.Length != 3) Data.buildingLevels = new int[3];
             if (Data.forageLevels == null || Data.forageLevels.Length != 4) Data.forageLevels = new int[4];
             Data.role = Mathf.Clamp(Data.role, 0, AntRoles.All.Length - 1);
+            if (Data.revealed == null) Data.revealed = new List<int>();
+            if (Data.poiFound == null || Data.poiFound.Length != 2) Data.poiFound = new bool[2];
             if (Data.dailyClaimed == null || Data.dailyClaimed.Length != 3) Data.dailyClaimed = new bool[3];
 
             ApplyOfflineIncome();
@@ -107,12 +115,12 @@ namespace Antopia
         // ---- Mejoras de la obrera (cuestan monedas y ramas) ----
         public const int ForageMaxLevel = 5;
         public const int ForageBaseCapacity = 5;
-        public static readonly string[] ForageUpgradeNames = { "Capacidad", "Velocidad", "Alcance", "Tiempo" };
+        public static readonly string[] ForageUpgradeNames = { "Capacidad", "Velocidad", "Alcance", "Suerte" };
 
         public static int ForageCapacity => ForageBaseCapacity + Data.forageLevels[0];
         public static float ForageSpeedMultiplier => 1f + 0.08f * Data.forageLevels[1];
         public static float ForagePickupRadius => 0.8f + 0.12f * Data.forageLevels[2];
-        public static float ForageDuration => 60f + 8f * Data.forageLevels[3];
+        public static float ForageLuck => 0.10f * Data.forageLevels[3]; // probabilidad de que un recurso cuente doble
 
         public static int ForageCoinCost(int u) => Mathf.RoundToInt(40f * Mathf.Pow(1.6f, Data.forageLevels[u]) * (1f + 0.15f * u));
         public static int ForageTwigCost(int u) => 2 + Data.forageLevels[u];
@@ -125,7 +133,7 @@ namespace Antopia
                 case 0: return $"Carga de {ForageBaseCapacity + l} (siguiente {ForageBaseCapacity + l + 1})";
                 case 1: return $"Velocidad x{1f + 0.08f * l:0.00} (siguiente x{1f + 0.08f * (l + 1):0.00})";
                 case 2: return $"Alcance {0.8f + 0.12f * l:0.00} (siguiente {0.8f + 0.12f * (l + 1):0.00})";
-                default: return $"Expedicion de {60 + 8 * l} s (siguiente {68 + 8 * l} s)";
+                default: return $"{10 * l}% de recoger doble (siguiente {10 * (l + 1)}%)";
             }
         }
 
@@ -204,6 +212,50 @@ namespace Antopia
             Notify();
         }
 
+        public const int RoleSwitchCost = 40;  // monedas por cambiar de rol en el mundo
+        public const int TunnelTwigCost = 8;   // ramas para empezar el tunel
+
+        public static bool TryPayCoins(int n)
+        {
+            if (Data.coins < n) return false;
+            Data.coins -= n;
+            Notify();
+            return true;
+        }
+
+        public static void AddCoins(int n)
+        {
+            Data.coins += n;
+            Notify();
+        }
+
+        public static bool TryPayTwigs(int n)
+        {
+            if (Data.twigs < n) return false;
+            Data.twigs -= n;
+            Notify();
+            return true;
+        }
+
+        public static void AddTwigs(int n)
+        {
+            Data.twigs += n;
+            Notify();
+        }
+
+        // Entrega de la obrera: la miel vale 4 hojas y los cristales dan piezas para las constructoras.
+        public static (int leaves, int twigs, int pieces) CompleteDelivery(int leaves, int twigs, int honey, int crystals)
+        {
+            int l = Mathf.RoundToInt((leaves + honey * 4) * HarvestMultiplier);
+            int t = Mathf.RoundToInt(twigs * HarvestMultiplier);
+            Data.leaves += l;
+            Data.twigs += t;
+            Data.pieces += crystals;
+            Data.dailyForages++;
+            Notify();
+            return (l, t, crystals);
+        }
+
         // Entrega una carga en el nido (aplica el bonus de la Despensa) y devuelve lo que se ha sumado.
         public static (int leaves, int twigs) CompleteForage(int leaves, int twigs)
         {
@@ -214,6 +266,14 @@ namespace Antopia
             Data.dailyForages++;
             Notify();
             return (l, t);
+        }
+
+        // Monedas ganadas por las soldado en una batalla de baile.
+        public static void CompleteBattle(int coins)
+        {
+            if (coins <= 0) return;
+            Data.coins += coins;
+            Notify();
         }
 
         public static bool TryStartBuild()

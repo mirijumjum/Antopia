@@ -38,6 +38,7 @@ namespace Antopia
         Text _left, _center, _right, _msg, _hint;
         Transform _world, _ant, _mover;
         Camera _cam;
+        Vector3 _shake;
         Vector3 _camHome;
         Quaternion _camHomeRot;
         float _camHomeFov;
@@ -47,11 +48,12 @@ namespace Antopia
         int _floors, _streak, _perfects;
         bool _ended, _complete;
         Action _onClose;
+        Action<int> _onResult;
 
         int Pieces => Mathf.Min(_floors, MaxFloors) + (_complete ? CompleteBonus : 0);
         float TopY => BaseTop + _floors * Height;
 
-        public static BuilderGame Open(Transform parent, Action onClose)
+        public static BuilderGame Open(Transform parent, Action onClose, Action<int> onResult = null)
         {
             var go = new GameObject("BuilderGame", typeof(RectTransform));
             go.transform.SetParent(parent, false);
@@ -60,6 +62,7 @@ namespace Antopia
             rt.anchorMax = Vector2.one;
             rt.offsetMin = rt.offsetMax = Vector2.zero;
             var g = go.AddComponent<BuilderGame>();
+            g._onResult = onResult;
             g.Build(rt, onClose);
             return g;
         }
@@ -145,6 +148,9 @@ namespace Antopia
                 SpawnDebris(_mover, Mathf.Sign(dx));
                 _mover = null;
                 Say("Se cayo la pieza!");
+                Sfx.Play(Sfx.Id.Collapse);
+                Haptics.Big();
+                CamShake.Trigger(0.3f, 0.5f);
                 End(false);
                 return;
             }
@@ -158,10 +164,15 @@ namespace Antopia
                 if (_streak >= 3) newW = Mathf.Min(BaseWidth, _topW + 0.25f); // racha: la torre recupera anchura
                 Say(_streak >= 3 ? "Perfecto! La torre se ensancha" : "Perfecto!");
                 _hopT = 0f;
+                Sfx.Play(Sfx.Id.Perfect);
+                Haptics.Bump();
+                Juice.Popup(_root, new Vector3(_topX, y, Site.z), "Perfecto!", UiKit.Gold, 48);
             }
             else
             {
                 _streak = 0;
+                Sfx.Play(Sfx.Id.Drop);
+                Haptics.Tap();
                 newW = _topW - adx;
                 center = _topX + dx * 0.5f;
                 float sign = Mathf.Sign(dx);
@@ -182,6 +193,7 @@ namespace Antopia
             {
                 _complete = true;
                 Say("Torre completa!");
+                Sfx.Play(Sfx.Id.Fanfare);
                 End(true);
                 return;
             }
@@ -255,7 +267,9 @@ namespace Antopia
             var look = new Vector3(Site.x, TopY + 0.4f, Site.z);
             var pos = look + new Vector3(0f, 7.6f, -11.5f);
             float k = 1f - Mathf.Exp(-4f * Time.deltaTime);
-            _cam.transform.position = Vector3.Lerp(_cam.transform.position, pos, k);
+            var shake = CamShake.Offset();
+            _cam.transform.position = Vector3.Lerp(_cam.transform.position - _shake, pos, k) + shake;
+            _shake = shake;
             var want = Quaternion.LookRotation(look - _cam.transform.position);
             _cam.transform.rotation = Quaternion.Slerp(_cam.transform.rotation, want, k);
             _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, 56f, k);
@@ -288,6 +302,7 @@ namespace Antopia
         void Finish()
         {
             Game.CompleteBuild(Pieces);
+            _onResult?.Invoke(_floors);
             _onClose?.Invoke();
             Destroy(gameObject);
         }

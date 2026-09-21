@@ -38,28 +38,30 @@ namespace Antopia
 
             var root = new GameObject(name).transform;
             root.SetParent(parent, false);
+            var bodyT = new GameObject("Body").transform; // todo menos las patas: asi se puede animar aparte
+            bodyT.SetParent(root, false);
 
             // Cuerpo: cabeza grande, torax pequeno y abdomen redondo con una franja clara.
-            Part(root, PrimitiveType.Sphere, "Head", new Vector3(0f, 0.44f, 0.50f), new Vector3(0.70f, 0.64f, 0.66f), body);
-            Part(root, PrimitiveType.Sphere, "Thorax", new Vector3(0f, 0.30f, 0.04f), new Vector3(0.36f, 0.34f, 0.40f), body);
-            Part(root, PrimitiveType.Sphere, "Abdomen", new Vector3(0f, 0.36f, -0.40f), new Vector3(0.58f, 0.52f, 0.64f), body);
-            Part(root, PrimitiveType.Sphere, "Stripe", new Vector3(0f, 0.36f, -0.42f), new Vector3(0.60f, 0.14f, 0.66f), light);
+            Part(bodyT, PrimitiveType.Sphere, "Head", new Vector3(0f, 0.44f, 0.50f), new Vector3(0.70f, 0.64f, 0.66f), body);
+            Part(bodyT, PrimitiveType.Sphere, "Thorax", new Vector3(0f, 0.30f, 0.04f), new Vector3(0.36f, 0.34f, 0.40f), body);
+            Part(bodyT, PrimitiveType.Sphere, "Abdomen", new Vector3(0f, 0.36f, -0.40f), new Vector3(0.58f, 0.52f, 0.64f), body);
+            Part(bodyT, PrimitiveType.Sphere, "Stripe", new Vector3(0f, 0.36f, -0.42f), new Vector3(0.60f, 0.14f, 0.66f), light);
 
             // Cara: ojos grandes con brillo, mofletes y sonrisa.
             foreach (float side in new[] { -1f, 1f })
             {
-                Part(root, PrimitiveType.Sphere, "Eye", new Vector3(side * 0.17f, 0.50f, 0.77f), Vector3.one * 0.24f, white);
-                Part(root, PrimitiveType.Sphere, "Pupil", new Vector3(side * 0.17f, 0.50f, 0.875f), Vector3.one * 0.13f, ink);
-                Part(root, PrimitiveType.Sphere, "Shine", new Vector3(side * 0.145f, 0.545f, 0.935f), Vector3.one * 0.05f, white);
-                Part(root, PrimitiveType.Sphere, "Cheek", new Vector3(side * 0.28f, 0.36f, 0.72f), new Vector3(0.11f, 0.07f, 0.05f), blush);
+                Part(bodyT, PrimitiveType.Sphere, "Eye", new Vector3(side * 0.17f, 0.50f, 0.77f), Vector3.one * 0.24f, white);
+                Part(bodyT, PrimitiveType.Sphere, "Pupil", new Vector3(side * 0.17f, 0.50f, 0.875f), Vector3.one * 0.13f, ink);
+                Part(bodyT, PrimitiveType.Sphere, "Shine", new Vector3(side * 0.145f, 0.545f, 0.935f), Vector3.one * 0.05f, white);
+                Part(bodyT, PrimitiveType.Sphere, "Cheek", new Vector3(side * 0.28f, 0.36f, 0.72f), new Vector3(0.11f, 0.07f, 0.05f), blush);
 
                 // Antena corta con bolita en la punta.
-                Bar(root, new Vector3(side * 0.14f, 0.70f, 0.62f), new Vector3(side * 0.25f, 0.93f, 0.74f), 0.05f, limb);
-                Part(root, PrimitiveType.Sphere, "Bulb", new Vector3(side * 0.25f, 0.95f, 0.75f), Vector3.one * 0.12f, light);
+                Bar(bodyT, new Vector3(side * 0.14f, 0.70f, 0.62f), new Vector3(side * 0.25f, 0.93f, 0.74f), 0.05f, limb);
+                Part(bodyT, PrimitiveType.Sphere, "Bulb", new Vector3(side * 0.25f, 0.95f, 0.75f), Vector3.one * 0.12f, light);
             }
-            Part(root, PrimitiveType.Sphere, "Smile", new Vector3(0f, 0.34f, 0.815f), new Vector3(0.10f, 0.03f, 0.03f), ink);
+            Part(bodyT, PrimitiveType.Sphere, "Smile", new Vector3(0f, 0.34f, 0.815f), new Vector3(0.10f, 0.03f, 0.03f), ink);
 
-            AddAccessory(root, variant);
+            AddAccessory(bodyT, variant);
 
             // Seis patitas cortas y gorditas con marcha de trinca (alternando tres y tres).
             var pivots = new Transform[6];
@@ -89,7 +91,7 @@ namespace Antopia
                     n++;
                 }
             }
-            root.gameObject.AddComponent<AntRig>().Init(pivots, sides, yaws, phases);
+            root.gameObject.AddComponent<AntRig>().Init(pivots, sides, yaws, phases, bodyT);
             return root;
         }
 
@@ -149,7 +151,7 @@ namespace Antopia
             return m;
         }
 
-        static Transform Part(Transform parent, PrimitiveType type, string name, Vector3 pos, Vector3 scale, Material mat)
+        internal static Transform Part(Transform parent, PrimitiveType type, string name, Vector3 pos, Vector3 scale, Material mat)
         {
             var t = NestView.Prim(type, name, Vector3.zero, scale, "Ant").transform;
             t.SetParent(parent, false);
@@ -160,7 +162,7 @@ namespace Antopia
         }
 
         // Barra fina entre dos puntos (locales al padre).
-        static void Bar(Transform parent, Vector3 a, Vector3 b, float thickness, Material mat)
+        internal static void Bar(Transform parent, Vector3 a, Vector3 b, float thickness, Material mat)
         {
             var d = b - a;
             var t = Part(parent, PrimitiveType.Cube, "Bar", (a + b) * 0.5f, new Vector3(thickness, thickness, d.magnitude), mat);

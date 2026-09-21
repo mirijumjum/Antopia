@@ -31,7 +31,10 @@ namespace Antopia
         Action<int> _onPlay;
         Action _onClose;
 
-        public static RoleScreen Open(Transform parent, Action<int> onPlay, Action onClose)
+        int _current = -1, _cost;
+
+        // current/cost: si se pasa un rol actual, elegir otro cuesta "cost" monedas.
+        public static RoleScreen Open(Transform parent, Action<int> onPlay, Action onClose, int current = -1, int cost = 0)
         {
             var go = new GameObject("RoleScreen", typeof(RectTransform));
             go.transform.SetParent(parent, false);
@@ -40,6 +43,8 @@ namespace Antopia
             rt.anchorMax = new Vector2(1f, 0.915f); // deja visible la barra de recursos
             rt.offsetMin = rt.offsetMax = Vector2.zero;
             var s = go.AddComponent<RoleScreen>();
+            s._current = current;
+            s._cost = cost;
             s.Build(rt, onPlay, onClose);
             return s;
         }
@@ -73,7 +78,7 @@ namespace Antopia
                 Destroy(gameObject);
             }, 0.06f, 0.03f, 0.94f, 0.13f, "Icon37");
 
-            Select(Mathf.Clamp(Game.Data.role, 0, AntRoles.All.Length - 1));
+            Select(Mathf.Clamp(_current >= 0 ? _current : Game.Data.role, 0, AntRoles.All.Length - 1));
             _ring.position = Origin + Cells[_selected];
             _ants[_selected].localScale = Vector3.one * SelectedScale;
         }
@@ -152,12 +157,13 @@ namespace Antopia
         void Select(int i)
         {
             _selected = i;
-            Game.SetRole(i);
             var r = AntRoles.All[i];
             _roleName.text = r.Name;
             _roleDesc.text = r.Description;
-            UiKit.SetButtonText(_play, r.HasGame ? $"Jugar: {r.Verb}" : "Probar (en desarrollo)");
-            UiKit.SetButtonColor(_play, r.Ui);
+            bool change = _current >= 0 && i != _current;
+            bool affordable = !change || Game.Data.coins >= _cost;
+            UiKit.SetButtonText(_play, !change ? (_current >= 0 ? $"Seguir como {r.Name}" : $"Jugar: {r.Verb}") : $"Cambiar a {r.Name} ({_cost} monedas)");
+            UiKit.SetButtonColor(_play, affordable ? r.Ui : UiKit.Disabled);
         }
 
         void Update()

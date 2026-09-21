@@ -13,6 +13,8 @@ namespace Antopia
         RectTransform _safe, _actions;
         Text _coins, _leaves, _twigs, _pieces, _toast, _playTitle, _playSub, _sellCaption, _badgeText;
         Button _playBtn;
+        CountText _coinsC, _leavesC, _twigsC, _piecesC;
+        bool _hudShown;
         GameObject _badge;
         GameObject _overlay;
         Action<RectTransform> _overlayBuild;
@@ -34,6 +36,7 @@ namespace Antopia
         void Start()
         {
             RefreshHud();
+            Sfx.StartMusic();
             if (!string.IsNullOrEmpty(Game.OfflineMessage)) Toast(Game.OfflineMessage, 6f);
             else Toast("Bienvenida a Antopia", 3f);
         }
@@ -80,6 +83,10 @@ namespace Antopia
             _leaves = HudStat(1, "Btn08", Color.white);
             _twigs = HudStat(2, "Btn06", new Color(0.85f, 0.62f, 0.45f));
             _pieces = HudStat(3, "Btn10", Color.white);
+            _coinsC = CountText.Attach(_coins);
+            _leavesC = CountText.Attach(_leaves);
+            _twigsC = CountText.Attach(_twigs);
+            _piecesC = CountText.Attach(_pieces);
 
             var toastBg = UiKit.Pill(_safe, "ToastBg", 0.85f, 0.10f, 0.86f, 0.90f, 0.915f);
             _toast = UiKit.Label(toastBg.transform, "", 30, TextAnchor.MiddleCenter, UiKit.Cream, 0.03f, 0f, 0.97f, 1f);
@@ -97,8 +104,16 @@ namespace Antopia
             {
                 int gain = Game.Data.leaves * Game.LeafPrice;
                 Game.SellLeaves();
-                if (gain > 0) Toast($"Vendiste hojas por {gain} monedas", 3f);
+                if (gain > 0)
+                {
+                    Sfx.Play(Sfx.Id.Coin);
+                    Haptics.Tap();
+                    Toast($"Vendiste hojas por {gain} monedas", 3f);
+                }
             });
+
+            // Ajustes (sonido, musica, vibracion).
+            UiKit.IconButton(_actions, "Icon12", OpenSettings, 0.015f, 0.868f, 0.095f, 0.915f);
 
             // Aviso rojo sobre "Diarias" cuando hay premios listos.
             float cx = DockX(2);
@@ -128,17 +143,16 @@ namespace Antopia
         void RefreshHud()
         {
             var d = Game.Data;
-            _coins.text = d.coins.ToString();
-            _leaves.text = d.leaves.ToString();
-            _twigs.text = d.twigs.ToString();
-            _pieces.text = d.pieces.ToString();
+            _coinsC.Set(d.coins, !_hudShown);
+            _leavesC.Set(d.leaves, !_hudShown);
+            _twigsC.Set(d.twigs, !_hudShown);
+            _piecesC.Set(d.pieces, !_hudShown);
+            _hudShown = true;
 
             var role = AntRoles.All[d.role];
             UiKit.SetButtonColor(_playBtn, role.Ui);
             _playTitle.text = "JUGAR";
-            _playSub.text = d.role == AntRoles.Constructora
-                ? $"{role.Name}  -  construir ({Game.BuildTwigCost} ramas)"
-                : $"{role.Name}  -  {(role.HasGame ? role.Verb : "modo de prueba")}";
+            _playSub.text = $"{role.Name}  -  {role.Verb}";
 
             int pending = Game.DailyPending();
             _badge.SetActive(pending > 0);
@@ -156,15 +170,12 @@ namespace Antopia
             _toastUntil = Time.time + seconds;
         }
 
-        // ---------------- Roles ----------------
+        // ---------------- Roles y mundo ----------------
+        // Elegir un rol lo guarda y entra al mundo con el.
         internal void PlayRole(int role)
         {
-            switch (role)
-            {
-                case AntRoles.Obrera: OpenForager(); break;
-                case AntRoles.Constructora: OpenBuilder(); break;
-                default: OpenRoam(role); break;
-            }
+            Game.SetRole(role);
+            OpenWorld();
         }
 
         void PlaySelectedRole() => PlayRole(Game.Data.role);
@@ -177,41 +188,15 @@ namespace Antopia
             RoleScreen.Open(_safe, PlayRole, () => _actions.gameObject.SetActive(true));
         }
 
-        void OpenRoam(int role)
+        void OpenWorld()
         {
             CloseOverlay();
             HideToast();
-            _actions.gameObject.SetActive(false);
-            RoamGame.Open(_safe, role, () => _actions.gameObject.SetActive(true));
-        }
-
-        // ---------------- Minijuegos ----------------
-        void OpenForager()
-        {
-            CloseOverlay();
-            HideToast();
-            _actions.gameObject.SetActive(false); // deja ver el mundo durante la expedicion
-            ForagerGame.Open(_safe, () =>
+            _actions.gameObject.SetActive(false); // deja ver el mundo
+            WorldGame.Open(_safe, () =>
             {
                 _actions.gameObject.SetActive(true);
-                Toast("Expedicion terminada", 3f);
-            });
-        }
-
-        void OpenBuilder()
-        {
-            CloseOverlay();
-            if (!Game.TryStartBuild())
-            {
-                Toast($"Necesitas {Game.BuildTwigCost} ramas. Recolectalas con la obrera.", 4f);
-                return;
-            }
-            HideToast();
-            _actions.gameObject.SetActive(false);
-            BuilderGame.Open(_safe, () =>
-            {
-                _actions.gameObject.SetActive(true);
-                Toast("Obra completada", 3f);
+                Toast("Vuelves al nido", 2f);
             });
         }
 
@@ -256,6 +241,29 @@ namespace Antopia
         {
             UiKit.Label(card, name, nameSize, TextAnchor.MiddleLeft, UiKit.Gold, 0.06f, 0.58f, 0.60f, 0.96f).fontStyle = FontStyle.Bold;
             UiKit.Label(card, detail, detailSize, TextAnchor.UpperLeft, UiKit.Cream, 0.06f, 0.08f, 0.60f, 0.60f);
+        }
+
+        internal void OpenSettings()
+        {
+            OpenOverlay(rt =>
+            {
+                PanelHeader(rt, "Ajustes");
+                string[] names = { "Efectos de sonido", "Musica", "Vibracion" };
+                Func<bool>[] get = { () => Sfx.SfxOn, () => Sfx.MusicOn, () => Sfx.HapticsOn };
+                Action<bool>[] set = { v => Sfx.SfxOn = v, v => Sfx.MusicOn = v, v => Sfx.HapticsOn = v };
+                for (int i = 0; i < names.Length; i++)
+                {
+                    int k = i;
+                    var card = Card(rt, 0.80f - i * 0.2f, 0.17f);
+                    UiKit.Label(card, names[k], 44, TextAnchor.MiddleLeft, UiKit.Cream, 0.06f, 0.15f, 0.55f, 0.85f).fontStyle = FontStyle.Bold;
+                    bool on = get[k]();
+                    UiKit.MakeButton(card, on ? "Activado" : "Desactivado", on ? UiKit.Leaf : UiKit.Disabled, 36, () =>
+                    {
+                        set[k](!get[k]());
+                        OpenSettings();
+                    }, 0.60f, 0.18f, 0.96f, 0.82f);
+                }
+            });
         }
 
         // tab 0 = edificios del nido (monedas + piezas), tab 1 = mejoras de la obrera (monedas + ramas).

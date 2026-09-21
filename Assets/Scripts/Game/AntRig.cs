@@ -14,8 +14,19 @@ namespace Antopia
         Vector3 _last;
         float _phase;
 
-        public void Init(Transform[] legs, float[] sides, float[] baseYaw, float[] phaseOffset)
+        float _bounceT = 1f;
+
+        // Saltito de alegria del cuerpo (sin mover a la hormiga).
+        public void Bounce() => _bounceT = 0f;
+
+        public Transform Body { get; private set; }
+        public Transform[] Legs => _legs;
+        public float[] Sides => _sides;
+        public float[] BaseYaw => _baseYaw;
+
+        public void Init(Transform[] legs, float[] sides, float[] baseYaw, float[] phaseOffset, Transform body = null)
         {
+            Body = body;
             _legs = legs;
             _sides = sides;
             _baseYaw = baseYaw;
@@ -30,6 +41,11 @@ namespace Antopia
             if (_legs == null) return;
             float dt = Time.deltaTime;
             if (dt <= 0f) return;
+            if (_bounceT < 1f && Body != null)
+            {
+                _bounceT = Mathf.Min(1f, _bounceT + dt * 3.2f);
+                Body.localPosition = _bounceT >= 1f ? Vector3.zero : new Vector3(0f, Mathf.Sin(_bounceT * Mathf.PI) * 0.3f, 0f);
+            }
             var p = transform.position;
             float speed = ForcedSpeed >= 0f ? ForcedSpeed : Mathf.Min(Vector3.Distance(p, _last) / dt / transform.lossyScale.x, 12f);
             _last = p;

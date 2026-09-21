@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Antopia
@@ -6,7 +7,7 @@ namespace Antopia
     // Se mueve siempre hacia delante y gira hacia la ultima direccion deslizada; no atraviesa el nido ni los edificios.
     public class AntRunner
     {
-        public const float WorldHalf = 13f;
+        public const float WorldHalf = 31f;
         public const float AntRadius = 0.3f;
         public const float MoundRadius = 2.15f;
         public const float DeliverRadius = MoundRadius + AntRadius + 0.35f;
@@ -16,6 +17,10 @@ namespace Antopia
 
         // Radio de colision del edificio i: crece con su nivel igual que el modelo.
         public static float BuildingRadius(int i) => BaseBuildingRadius[i] * NestView.BuildingScale(Game.Data.buildingLevels[i]);
+
+        // Muros (rectangulos en XZ: Rect.x = X, Rect.y = Z) y bloqueos circulares (por ejemplo el escarabajo del paso).
+        public static readonly List<Rect> Walls = new List<Rect>();
+        public static readonly List<(Vector3 pos, float radius)> Blockers = new List<(Vector3, float)>();
 
         public readonly Transform Ant;
         public bool HasMoved { get; private set; }  // ya se ha movido alguna vez
@@ -48,6 +53,8 @@ namespace Antopia
             pos.z = Mathf.Clamp(pos.z, -WorldHalf, WorldHalf);
             pos = PushOut(pos, NestView.NestEntrance, MoundRadius);
             for (int i = 0; i < BaseBuildingRadius.Length; i++) pos = PushOut(pos, NestView.BuildingPos[i], BuildingRadius(i));
+            foreach (var w in Walls) pos = PushOutRect(pos, w);
+            foreach (var b in Blockers) pos = PushOut(pos, b.pos, b.radius);
             pos.y = 0f;
             Ant.position = pos;
         }
@@ -64,6 +71,19 @@ namespace Antopia
         }
 
         public static Vector3 Flat(Vector3 v) => new Vector3(v.x, 0f, v.z);
+
+        static Vector3 PushOutRect(Vector3 pos, Rect r)
+        {
+            float minX = r.xMin - AntRadius, maxX = r.xMax + AntRadius, minZ = r.yMin - AntRadius, maxZ = r.yMax + AntRadius;
+            if (pos.x <= minX || pos.x >= maxX || pos.z <= minZ || pos.z >= maxZ) return pos;
+            float dl = pos.x - minX, dr = maxX - pos.x, db = pos.z - minZ, dt = maxZ - pos.z;
+            float m = Mathf.Min(Mathf.Min(dl, dr), Mathf.Min(db, dt));
+            if (m == dl) pos.x = minX;
+            else if (m == dr) pos.x = maxX;
+            else if (m == db) pos.z = minZ;
+            else pos.z = maxZ;
+            return pos;
+        }
 
         static Vector3 PushOut(Vector3 pos, Vector3 center, float radius)
         {

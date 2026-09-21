@@ -167,6 +167,8 @@ namespace Antopia
             colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
             btn.colors = colors;
             btn.onClick.AddListener(onClick);
+            btn.onClick.AddListener(() => Sfx.Play(Sfx.Id.Click));
+            img.gameObject.AddComponent<ButtonFx>();
             return btn;
         }
 
@@ -233,6 +235,8 @@ namespace Antopia
             colors.disabledColor = new Color(0.7f, 0.7f, 0.7f, 0.7f);
             btn.colors = colors;
             btn.onClick.AddListener(onClick);
+            btn.onClick.AddListener(() => Sfx.Play(Sfx.Id.Click));
+            img.gameObject.AddComponent<ButtonFx>();
             SetButtonColor(btn, color);
 
             float textLeft = 0.02f;
