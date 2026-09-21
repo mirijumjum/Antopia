@@ -87,6 +87,25 @@ namespace Antopia
             return i < 0 || _clouds[i] == null;
         }
 
+        // Casilla con nube que aun no se esta deshaciendo.
+        public bool IsFogged(int i) => i >= 0 && i < _clouds.Length && _clouds[i] != null && _clouds[i].t < 0f;
+
+        // La casilla con nube mas cercana a "from" que cumpla "allow" (o -1).
+        public int NearestFogged(Vector3 from, System.Func<int, bool> allow)
+        {
+            int best = -1;
+            float bd = float.MaxValue;
+            for (int i = 0; i < _clouds.Length; i++)
+            {
+                if (!IsFogged(i) || !allow(i)) continue;
+                var d = Center(i) - from;
+                d.y = 0f;
+                float m = d.sqrMagnitude;
+                if (m < bd) { bd = m; best = i; }
+            }
+            return best;
+        }
+
         // Deshace las nubes a menos de "radius" de pos y devuelve las casillas destapadas ahora.
         public List<int> Reveal(Vector3 pos, float radius)
         {

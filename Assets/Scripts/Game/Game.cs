@@ -14,6 +14,7 @@ namespace Antopia
         public List<int> revealed = new List<int>(); // celdas de niebla ya destapadas
         public bool[] poiFound = new bool[2];        // sitios de interes descubiertos
         public bool guardDefeated, tunnelBuilt;      // caminos abiertos
+        public float[] npcWork = new float[2];       // segundos de trabajo de las escuadras NPC: 0 = soldados, 1 = constructoras
         public int questStep;                        // paso actual de la mision guiada
         public int statPickups, statDeliveries, statHoney, statCrystals; // contadores para las misiones
         public string dayKey = "";
@@ -64,6 +65,7 @@ namespace Antopia
             Data.role = Mathf.Clamp(Data.role, 0, AntRoles.All.Length - 1);
             if (Data.revealed == null) Data.revealed = new List<int>();
             if (Data.poiFound == null || Data.poiFound.Length != 2) Data.poiFound = new bool[2];
+            if (Data.npcWork == null || Data.npcWork.Length != 2) Data.npcWork = new float[2];
             if (Data.dailyClaimed == null || Data.dailyClaimed.Length != 3) Data.dailyClaimed = new bool[3];
 
             ApplyOfflineIncome();
@@ -241,6 +243,22 @@ namespace Antopia
         {
             Data.twigs += n;
             Notify();
+        }
+
+        // Ayudantes NPC por cada rol que no juegas: crecen con el nivel de Tuneles.
+        public static int Helpers => 1 + Data.buildingLevels[1] / 4;
+        public const float NpcSoldierSeconds = 90f;  // lo que tardan las soldado NPC en despejar el paso
+        public const float NpcBuildSeconds = 60f;    // lo que tardan las constructoras NPC en levantar el tunel
+
+        // Entrega de una obrera NPC: sin bonus de la Despensa ni contadores de misiones o diarias.
+        public static (int leaves, int twigs, int pieces) NpcDelivery(int leaves, int twigs, int honey, int crystals)
+        {
+            int l = leaves + honey * 4;
+            Data.leaves += l;
+            Data.twigs += twigs;
+            Data.pieces += crystals;
+            Notify();
+            return (l, twigs, crystals);
         }
 
         // Entrega de la obrera: la miel vale 4 hojas y los cristales dan piezas para las constructoras.

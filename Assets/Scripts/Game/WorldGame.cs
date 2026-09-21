@@ -13,7 +13,7 @@ namespace Antopia
     //   Constructora levanta el tunel que abre el muro del este (necesita ramas).
     //   Soldado     vence bailando al escarabajo que tapa el paso del norte.
     // Cada camino que abre un rol deja trabajar a los demas. Cambiar de rol cuesta monedas.
-    public class WorldGame : MonoBehaviour
+    public partial class WorldGame : MonoBehaviour
     {
         enum Kind { Leaf, Twig, Honey, Crystal, Gem }
 
@@ -23,6 +23,7 @@ namespace Antopia
             public Kind kind;
             public float born, phase;
             public int zone;
+            public object claim; // NPC que va a por este recurso
         }
 
         const int MaxCargoViews = Game.ForageBaseCapacity + Game.ForageMaxLevel;
@@ -105,6 +106,7 @@ namespace Antopia
             _cargoViews = new Transform[MaxCargoViews];
             SpawnPlayer(StartPos, Quaternion.identity);
             _chase = new ChaseCam();
+            BuildNpcs();
             for (int i = 0; i < 6; i++) TrySpawn();
             RefreshAll();
         }
@@ -232,6 +234,7 @@ namespace Antopia
             Pickups();
             if (_role == AntRoles.Obrera) TryDeliver();
             Interact();
+            UpdateNpcs(dt);
             AnimateItems();
 
             _saveTimer += dt;
@@ -247,6 +250,7 @@ namespace Antopia
         {
             if (_busy) return;
             _chase.Follow(_ant.position, Time.deltaTime);
+            PlaceNpcTag();
             var q = Quests.Current;
             var way = q != null && q.Role == _role ? q.Waypoint() : null;
             if (_role == AntRoles.Obrera && _cargo.Count > 0) _pointer.Show(NestView.NestEntrance, UiKit.Gold);
@@ -255,11 +259,14 @@ namespace Antopia
         }
 
         // ---------------- Niebla y descubrimientos ----------------
-        void Reveal()
+        void Reveal() => RevealAt(_ant.position, _role == AntRoles.Exploradora ? RevealExplorer : RevealNear, false);
+
+        // Destapa la niebla alrededor de un punto (el jugador o una exploradora NPC).
+        void RevealAt(Vector3 pos, float radius, bool byNpc)
         {
-            var opened = _fog.Reveal(_ant.position, _role == AntRoles.Exploradora ? RevealExplorer : RevealNear);
+            var opened = _fog.Reveal(pos, radius);
             if (opened == null) return;
-            Sfx.Play(Sfx.Id.Poof, 0.7f, Random.Range(0.9f, 1.1f));
+            Sfx.Play(Sfx.Id.Poof, byNpc ? 0.25f : 0.7f, Random.Range(0.9f, 1.1f));
             foreach (int i in opened)
             {
                 bool poiCell = false;
@@ -271,7 +278,7 @@ namespace Antopia
                     {
                         Game.Data.poiFound[p] = true;
                         Game.AddCoins(30);
-                        Say($"Descubierto: {WorldLayout.PoiNames[p]}! +30 monedas");
+                        Say(byNpc ? $"Tu exploradora ha descubierto {WorldLayout.PoiNames[p]}! +30 monedas" : $"Descubierto: {WorldLayout.PoiNames[p]}! +30 monedas");
                         Sfx.Play(Sfx.Id.Discover);
                         Haptics.Big();
                         CamShake.Trigger(0.12f, 0.25f);
@@ -477,19 +484,14 @@ namespace Antopia
             }, 2, 1, victory =>
             {
                 if (!victory) { Say("El escarabajo sigue ahi. Vuelve a intentarlo."); return; }
-                Game.Data.guardDefeated = true;
-                Blockers.Clear();
-                if (_guard != null) Destroy(_guard.gameObject);
-                _guard = null;
-                Game.Save();
-                Say("Camino del norte despejado!");
-                Sfx.Play(Sfx.Id.Fanfare);
+                ClearGuard("Camino del norte despejado!");
             });
         }
 
         void StartBuild()
         {
             if (!Game.TryPayTwigs(Game.TunnelTwigCost)) return;
+            Game.Data.npcWork[1] = 0f;
             _busy = true;
             _run.SetInput(Vector2.zero);
             SetWorldVisible(false);
@@ -503,16 +505,7 @@ namespace Antopia
             {
                 if (floors >= 4)
                 {
-                    Game.Data.tunnelBuilt = true;
-                    Walls.Clear();
-                    Walls.AddRange(WorldLayout.BuildWalls(true, out _));
-                    if (WorldDecor.PlugRoot != null) Destroy(WorldDecor.PlugRoot.gameObject);
-                    if (_sign != null) Destroy(_sign.gameObject);
-                    BuildArch();
-                    Game.Save();
-                    Say("Tunel abierto! Ya se puede pasar al este.");
-                    Sfx.Play(Sfx.Id.Fanfare);
-                    CamShake.Trigger(0.2f, 0.4f);
+                    OpenTunnel("Tunel abierto! Ya se puede pasar al este.");
                 }
                 else
                 {
@@ -545,9 +538,11 @@ namespace Antopia
                 return;
             }
             Game.SetRole(role);
+            int old = _role;
             _role = role;
             _cargo.Clear();
             SpawnPlayer(_ant.position, _ant.rotation);
+            SwapNpcs(old, role);
             RefreshAll();
             Say($"Ahora eres {AntRoles.All[role].Name}");
             Sfx.Play(Sfx.Id.Swoosh);
@@ -653,5 +648,6 @@ namespace Antopia
         internal void DebugTeleport(Vector3 pos) => _ant.position = pos;
         internal void DebugBattle() => StartBattle();
         internal void DebugBuild() => StartBuild();
+        internal void DebugNpcWork(float soldier, float builder) { Game.Data.npcWork[0] = soldier; Game.Data.npcWork[1] = builder; }
     }
 }

@@ -44,6 +44,7 @@ namespace Antopia
             Game.Data.guardDefeated = false;
             Game.Data.tunnelBuilt = false;
             Game.Data.questStep = 0;
+            Game.Data.npcWork = new float[2];
             Game.Data.statPickups = Game.Data.statDeliveries = Game.Data.statHoney = Game.Data.statCrystals = 0;
             Game.Data.role = 0;
             Game.Save();
@@ -78,6 +79,43 @@ namespace Antopia
                     c.PlayRole(AntRoles.Constructora);
                     FindFirstObjectByType<WorldGame>().DebugTeleport(new Vector3(9.5f, 0f, -6f));
                 }, 1.5f),
+                ("npc_nest", c =>
+                {
+                    // Escuadras de obreras y exploradoras trabajando cerca del nido mientras juegas de soldado.
+                    c.PlayRole(AntRoles.Soldado);
+                }, 7f),
+                ("npc_soldier", c =>
+                {
+                    // Soldados NPC bailando ante el escarabajo (con la mitad del avance ya hecho).
+                    c.PlayRole(AntRoles.Obrera);
+                    var w = FindFirstObjectByType<WorldGame>();
+                    w.DebugNpcWork(Game.NpcSoldierSeconds * 0.45f, 0f);
+                    w.DebugTeleport(new Vector3(0f, 0f, 5f));
+                }, 7f),
+                ("npc_builder", c =>
+                {
+                    // Constructoras NPC en la obra del tunel.
+                    c.PlayRole(AntRoles.Obrera);
+                    var w = FindFirstObjectByType<WorldGame>();
+                    w.DebugNpcWork(0f, Game.NpcBuildSeconds * 0.4f);
+                    w.DebugTeleport(new Vector3(10f, 0f, -1.5f));
+                }, 8f),
+                ("npc_done_guard", c =>
+                {
+                    // Las soldado NPC casi han terminado: el escarabajo debe desaparecer solo.
+                    c.PlayRole(AntRoles.Obrera);
+                    var w = FindFirstObjectByType<WorldGame>();
+                    w.DebugNpcWork(Game.NpcSoldierSeconds - 1.5f, 0f);
+                    w.DebugTeleport(new Vector3(0f, 0f, 6f));
+                }, 8f),
+                ("npc_done_tunnel", c =>
+                {
+                    // Las constructoras NPC casi han terminado: el tapon del tunel debe desaparecer solo.
+                    c.PlayRole(AntRoles.Obrera);
+                    var w = FindFirstObjectByType<WorldGame>();
+                    w.DebugNpcWork(0f, Game.NpcBuildSeconds - 1.5f);
+                    w.DebugTeleport(new Vector3(9f, 0f, -2f));
+                }, 9f),
                 ("trigger_battle", c =>
                 {
                     // La soldado se acerca al escarabajo y el combate debe empezar solo.
