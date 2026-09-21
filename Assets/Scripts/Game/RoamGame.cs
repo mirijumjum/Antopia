@@ -10,6 +10,7 @@ namespace Antopia
     {
         Transform _world, _ant;
         AntRunner _run;
+        VirtualJoystick _stick;
         ChaseCam _chase;
         Text _hint;
         Action _onClose;
@@ -32,20 +33,13 @@ namespace Antopia
             _onClose = onClose;
             var r = AntRoles.All[role];
 
-            var padImg = UiKit.Box(root, "SwipePad", new Color(0f, 0f, 0f, 0f), 0f, 0f, 1f, 0.915f);
-            padImg.gameObject.AddComponent<SwipePad>().Swiped += dir =>
-            {
-                _run.Steer(dir);
-                _hint.text = "Desliza para cambiar de direccion.";
-            };
+            var padImg = UiKit.Box(root, "Pad", new Color(0f, 0f, 0f, 0f), 0f, 0f, 1f, 0.915f);
+            _stick = VirtualJoystick.Attach(padImg.gameObject);
 
-            UiKit.Box(root, "InfoBg", new Color(0.12f, 0.09f, 0.06f, 0.85f), 0f, 0.85f, 1f, 0.915f).raycastTarget = false;
-            UiKit.Label(root, $"{r.Name}: modo de prueba", 40, TextAnchor.MiddleCenter, UiKit.Gold, 0.02f, 0.85f, 0.98f, 0.915f);
-
-            UiKit.Box(root, "HintBg", new Color(0f, 0f, 0f, 0.5f), 0.02f, 0.02f, 0.70f, 0.10f).raycastTarget = false;
-            _hint = UiKit.Label(root, "Este rol aun no tiene juego. Desliza el dedo para moverte.", 32, TextAnchor.MiddleCenter,
-                UiKit.Cream, 0.03f, 0.02f, 0.69f, 0.10f);
-            UiKit.MakeButton(root, "Salir", UiKit.Cream, 40, Finish, 0.73f, 0.02f, 0.98f, 0.10f);
+            var hud = new MinigameHud(root, Finish);
+            hud.Center.text = $"{r.Name} (prueba)";
+            _hint = hud.Hint;
+            _hint.text = "Este rol aun no tiene juego. Manten el dedo y arrastra para moverte.";
 
             _world = new GameObject("RoamWorld").transform;
             _ant = AntModel.Create("RoamAnt", r.Variant, _world);
@@ -57,6 +51,7 @@ namespace Antopia
 
         void Update()
         {
+            _run.SetInput(_stick.Value);
             _run.Move(Time.deltaTime);
         }
 

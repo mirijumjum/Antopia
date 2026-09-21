@@ -23,6 +23,8 @@ namespace Antopia.EditorTools
                 // Borde del 9-slice: izquierda, abajo, derecha, arriba.
                 if (n.StartsWith("Button")) ti.spriteBorder = new Vector4(48f, 40f, 48f, 40f);
                 else if (n.StartsWith("Msg")) ti.spriteBorder = new Vector4(48f, 48f, 48f, 52f);
+                else if (n.StartsWith("SliderBar")) ti.spriteBorder = new Vector4(28f, 22f, 28f, 22f);
+                else if (n.StartsWith("Progress")) ti.spriteBorder = new Vector4(24f, 14f, 24f, 14f);
             }
             else if (assetPath.StartsWith("Assets/Resources/Textures/"))
             {

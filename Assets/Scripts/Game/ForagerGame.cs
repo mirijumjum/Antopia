@@ -31,6 +31,9 @@ namespace Antopia
         Transform _world, _ant;
         Transform[] _cargoViews;
         AntRunner _run;
+        VirtualJoystick _stick;
+        internal Vector2 DebugInput; // para las capturas automaticas
+        bool _intro; // ya se ha movido y la pista inicial ha cambiado
         ChaseCam _chase;
         TargetPointer _pointer;
         readonly List<Item> _items = new List<Item>();
@@ -60,18 +63,15 @@ namespace Antopia
             _onClose = onClose;
 
             // El mundo 3D se ve a traves de la UI: solo hay una zona tactil transparente y barras encima.
-            var padImg = UiKit.Box(root, "SwipePad", new Color(0f, 0f, 0f, 0f), 0f, 0f, 1f, 0.915f);
-            padImg.gameObject.AddComponent<SwipePad>().Swiped += OnSwipe;
+            var padImg = UiKit.Box(root, "Pad", new Color(0f, 0f, 0f, 0f), 0f, 0f, 1f, 0.915f);
+            _stick = VirtualJoystick.Attach(padImg.gameObject);
 
-            UiKit.Box(root, "InfoBg", new Color(0.12f, 0.09f, 0.06f, 0.85f), 0f, 0.85f, 1f, 0.915f).raycastTarget = false;
-            _timer = UiKit.Label(root, "", 38, TextAnchor.MiddleCenter, UiKit.Cream, 0.01f, 0.85f, 0.25f, 0.915f);
-            _cargoText = UiKit.Label(root, "", 38, TextAnchor.MiddleCenter, UiKit.Gold, 0.25f, 0.85f, 0.55f, 0.915f);
-            _deliveredText = UiKit.Label(root, "", 34, TextAnchor.MiddleCenter, UiKit.Cream, 0.55f, 0.85f, 0.99f, 0.915f);
-            _msg = UiKit.Label(root, "", 46, TextAnchor.MiddleCenter, UiKit.Gold, 0.05f, 0.78f, 0.95f, 0.85f);
-
-            UiKit.Box(root, "HintBg", new Color(0f, 0f, 0f, 0.5f), 0.02f, 0.02f, 0.70f, 0.10f).raycastTarget = false;
-            _hint = UiKit.Label(root, "", 32, TextAnchor.MiddleCenter, UiKit.Cream, 0.03f, 0.02f, 0.69f, 0.10f);
-            UiKit.MakeButton(root, "Salir", UiKit.Cream, 40, Finish, 0.73f, 0.02f, 0.98f, 0.10f);
+            var hud = new MinigameHud(root, Finish);
+            _timer = hud.Left;
+            _cargoText = hud.Center;
+            _deliveredText = hud.Right;
+            _msg = hud.Msg;
+            _hint = hud.Hint;
             _pointer = new TargetPointer(root);
 
             BuildWorld();
@@ -119,25 +119,9 @@ namespace Antopia
         {
             if (_items.Count >= MaxItems || !FindSpot(out var p)) return;
             bool twig = Random.value < 0.3f;
-            var go = new GameObject(twig ? "Twig" : "Grass");
-            go.transform.SetParent(_world, false);
+            var go = WorldDecor.CreateItem(twig, _world);
             go.transform.position = p;
             go.transform.rotation = Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
-            if (twig)
-            {
-                Part(go.transform, PrimitiveType.Cube, "A", new Vector3(0f, 0.06f, 0f), new Vector3(1.0f, 0.1f, 0.14f), "Twig");
-                var b = Part(go.transform, PrimitiveType.Cube, "B", new Vector3(0.1f, 0.11f, 0.05f), new Vector3(0.7f, 0.09f, 0.12f), "Twig");
-                b.localRotation = Quaternion.Euler(0f, 35f, 0f);
-            }
-            else
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    var blade = Part(go.transform, PrimitiveType.Cube, "Blade", new Vector3((i - 1.5f) * 0.13f, 0.28f, (i % 2) * 0.1f),
-                        new Vector3(0.09f, 0.55f, 0.06f), "Leaf");
-                    blade.localRotation = Quaternion.Euler(Random.Range(-15f, 15f), 0f, Random.Range(-18f, 18f));
-                }
-            }
             go.transform.localScale = Vector3.zero;
             _items.Add(new Item { go = go, twig = twig, born = Time.time, phase = Random.value * 6.28f });
         }
@@ -159,14 +143,6 @@ namespace Antopia
         }
 
         // ---------------- Bucle ----------------
-        void OnSwipe(Vector2 dir)
-        {
-            if (!_running) return;
-            bool wasMoving = _run.Moving;
-            _run.Steer(dir);
-            if (!wasMoving) RefreshHint();
-        }
-
         void Update()
         {
             if (_running)
@@ -184,7 +160,13 @@ namespace Antopia
                         _spawnTimer = Random.Range(0.6f, 1.1f);
                         Spawn();
                     }
+                    _run.SetInput(DebugInput != Vector2.zero ? DebugInput : _stick.Value);
                     _run.Move(Time.deltaTime);
+                    if (!_intro && _run.HasMoved)
+                    {
+                        _intro = true;
+                        RefreshHint();
+                    }
                     Pickups();
                     TryDeliver();
                     int sec = Mathf.CeilToInt(_timeLeft);
@@ -285,15 +267,15 @@ namespace Antopia
 
         void RefreshDelivered()
         {
-            _deliveredText.text = $"Entregado: {_gotLeaves} hojas, {_gotTwigs} ramas";
+            _deliveredText.text = $"Hojas {_gotLeaves}  Ramas {_gotTwigs}";
         }
 
         void RefreshHint()
         {
-            if (!_run.Moving) _hint.text = "Desliza el dedo para moverte. Recoge hierba y ramas y llevalas al nido.";
+            if (!_run.HasMoved) _hint.text = "Manten el dedo y arrastra para moverte. Recoge hierba y ramas y llevalas al nido.";
             else if (_cargo.Count >= Capacity) _hint.text = "Carga llena: vuelve al nido.";
             else if (_cargo.Count > 0) _hint.text = "Lleva la carga al nido (monticulo marron).";
-            else _hint.text = "Desliza para cambiar de direccion.";
+            else _hint.text = "Arrastra para moverte, suelta para parar.";
         }
 
         void EndRound()
@@ -304,7 +286,7 @@ namespace Antopia
             string summary = $"{_trips} entregas en el nido\n+{_gotLeaves} hojas   +{_gotTwigs} ramas\n(incluye bonus de Despensa x{Game.HarvestMultiplier:0.00})";
             if (lost > 0) summary += $"\nSe perdio la carga que llevabas ({lost}).";
             var panel = UiKit.Frame(_root, "Result", UiKit.Skin.Green, 0.05f, 0.30f, 0.95f, 0.74f);
-            UiKit.Label(panel.transform, "Expedicion terminada", 54, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.72f, 0.95f, 0.98f);
+            UiKit.Label(panel.transform, "Expedicion terminada", 50, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.72f, 0.95f, 0.98f);
             UiKit.Label(panel.transform, summary, 40, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.30f, 0.95f, 0.72f);
             UiKit.MakeButton(panel.transform, "Volver", UiKit.Gold, 54, Finish, 0.25f, 0.05f, 0.75f, 0.26f);
         }

@@ -13,10 +13,8 @@ namespace Antopia
         public TargetPointer(Transform parent)
         {
             _cam = Camera.main;
-            _bg = UiKit.Box(parent, "Pointer", UiKit.Gold, 0.5f, 0.5f, 0.5f, 0.5f);
-            _bg.raycastTarget = false;
+            _bg = UiKit.Icon(parent, "Icon45", Color.white, 0.5f, 0.5f, 0.5f, 0.5f);
             _rt = _bg.rectTransform;
-            UiKit.Label(_rt, ">", 72, TextAnchor.MiddleCenter, UiKit.Ink, 0f, 0f, 1f, 1f);
             _bg.gameObject.SetActive(false);
         }
 
@@ -25,7 +23,7 @@ namespace Antopia
             if (_bg.gameObject.activeSelf) _bg.gameObject.SetActive(false);
         }
 
-        public void Show(Vector3 target, Color color)
+        public void Show(Vector3 target, Color color) // el color ya no se usa: la flecha es siempre la del pack
         {
             if (_cam == null) { Hide(); return; }
             var vp = _cam.WorldToViewportPoint(target);
@@ -39,7 +37,6 @@ namespace Antopia
             var p = new Vector2(0.5f, 0.49f) + dir * t;
 
             _bg.gameObject.SetActive(true);
-            _bg.color = color;
             _rt.anchorMin = _rt.anchorMax = p;
             _rt.anchoredPosition = Vector2.zero;
             _rt.sizeDelta = new Vector2(96f, 96f);

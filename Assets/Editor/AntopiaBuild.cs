@@ -94,5 +94,22 @@ namespace Antopia.EditorTools
             Debug.Log($"[AntopiaBuild] Result: {summary.result}, size: {summary.totalSize / (1024 * 1024)} MB, errors: {summary.totalErrors}");
             EditorApplication.Exit(summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded ? 0 : 1);
         }
+
+        // Build de Windows para hacer capturas automaticas de las pantallas (ver ShotRunner). Se lanza con
+        // -executeMethod Antopia.EditorTools.AntopiaBuild.BuildWindowsShots -buildTarget Win64
+        public static void BuildWindowsShots()
+        {
+            Directory.CreateDirectory("Builds/Shots");
+            var opts = new BuildPlayerOptions
+            {
+                scenes = new[] { ScenePath },
+                locationPathName = "Builds/Shots/Antopia.exe",
+                target = BuildTarget.StandaloneWindows64,
+                options = BuildOptions.None,
+            };
+            var summary = BuildPipeline.BuildPlayer(opts).summary;
+            Debug.Log($"[AntopiaBuild] Shots result: {summary.result}, errors: {summary.totalErrors}");
+            EditorApplication.Exit(summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded ? 0 : 1);
+        }
     }
 }

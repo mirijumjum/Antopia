@@ -1,33 +1,55 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using static Antopia.AntRunner;
 using Random = UnityEngine.Random;
 
 namespace Antopia
 {
-    // Obra de la constructora: recoge una pieza en el mundo 3D y llevala al solar antes de que se acabe el tiempo.
-    // Son BuildAttempts piezas; cada una que llega a tiempo suma a la torre. Se maneja con deslizamientos.
+    // Torre de la constructora: una pieza se desliza de lado a lado sobre la torre. Toca la pantalla para soltarla;
+    // lo que sobresale se corta y cae. Cada piso levantado es una pieza y, si llegas arriba, hay bonus. Si la pieza
+    // cae fuera de la torre, la obra termina.
     public class BuilderGame : MonoBehaviour
     {
-        const float PickupRadius = 0.8f;
-        const float SiteRadius = 1.3f;
-        const float BlockHeight = 0.32f;
+        const int MaxFloors = 10;
+        const int CompleteBonus = 2;
+        const float BaseWidth = 2.4f;
+        const float Depth = 2.0f;
+        const float Height = 0.45f;
+        const float BaseTop = 0.2f;       // altura de la tarima
+        const float Perfect = 0.10f;      // margen para colocar sin recorte
+        const float Range = 2.9f;         // recorrido de la pieza a cada lado del centro
+        static readonly Vector3 Site = new Vector3(7.5f, 0f, -5f);
+
+        static readonly Color[] BlockColors =
+        {
+            new Color(0.88f, 0.66f, 0.42f), new Color(0.74f, 0.52f, 0.34f), new Color(0.94f, 0.80f, 0.50f),
+            new Color(0.66f, 0.60f, 0.54f), new Color(0.84f, 0.58f, 0.42f), new Color(0.70f, 0.64f, 0.46f),
+        };
+
+        class Debris
+        {
+            public Transform t;
+            public Vector3 vel;
+            public float spin, life;
+        }
 
         RectTransform _root;
-        Text _timer, _info, _placedText, _msg, _hint;
-        Transform _world, _ant, _piece, _carryView, _site;
-        AntRunner _run;
-        ChaseCam _chase;
-        TargetPointer _pointer;
-        Vector3 _sitePos, _piecePos;
-        float _timeLeft, _msgUntil;
-        int _lastSecond = -1;
-        int _attempt, _hits;
-        bool _running, _carrying;
+        Text _left, _center, _right, _msg, _hint;
+        Transform _world, _ant, _mover;
+        Camera _cam;
+        Vector3 _camHome;
+        Quaternion _camHomeRot;
+        float _camHomeFov;
+        readonly List<Debris> _debris = new List<Debris>();
+        float _topX = Site.x, _topW = BaseWidth;
+        float _moverX, _dir = 1f, _speed, _msgUntil, _hopT = 1f;
+        int _floors, _streak, _perfects;
+        bool _ended, _complete;
         Action _onClose;
 
-        int Pieces => _hits + (_hits == Game.BuildAttempts ? 1 : 0);
+        int Pieces => Mathf.Min(_floors, MaxFloors) + (_complete ? CompleteBonus : 0);
+        float TopY => BaseTop + _floors * Height;
 
         public static BuilderGame Open(Transform parent, Action onClose)
         {
@@ -47,23 +69,19 @@ namespace Antopia
             _root = root;
             _onClose = onClose;
 
-            var padImg = UiKit.Box(root, "SwipePad", new Color(0f, 0f, 0f, 0f), 0f, 0f, 1f, 0.915f);
-            padImg.gameObject.AddComponent<SwipePad>().Swiped += OnSwipe;
+            var pad = UiKit.Box(root, "Pad", new Color(0f, 0f, 0f, 0f), 0f, 0f, 1f, 0.915f);
+            TapPad.Attach(pad.gameObject).Tapped += Drop;
 
-            UiKit.Box(root, "InfoBg", new Color(0.12f, 0.09f, 0.06f, 0.85f), 0f, 0.85f, 1f, 0.915f).raycastTarget = false;
-            _timer = UiKit.Label(root, "", 38, TextAnchor.MiddleCenter, UiKit.Cream, 0.01f, 0.85f, 0.25f, 0.915f);
-            _info = UiKit.Label(root, "", 38, TextAnchor.MiddleCenter, UiKit.Gold, 0.25f, 0.85f, 0.60f, 0.915f);
-            _placedText = UiKit.Label(root, "", 36, TextAnchor.MiddleCenter, UiKit.Cream, 0.60f, 0.85f, 0.99f, 0.915f);
-            _msg = UiKit.Label(root, "", 46, TextAnchor.MiddleCenter, UiKit.Gold, 0.05f, 0.78f, 0.95f, 0.85f);
-
-            UiKit.Box(root, "HintBg", new Color(0f, 0f, 0f, 0.5f), 0.02f, 0.02f, 0.70f, 0.10f).raycastTarget = false;
-            _hint = UiKit.Label(root, "", 32, TextAnchor.MiddleCenter, UiKit.Cream, 0.03f, 0.02f, 0.69f, 0.10f);
-            UiKit.MakeButton(root, "Salir", UiKit.Cream, 40, Finish, 0.73f, 0.02f, 0.98f, 0.10f);
-            _pointer = new TargetPointer(root);
+            var hud = new MinigameHud(root, Finish);
+            _left = hud.Left;
+            _center = hud.Center;
+            _right = hud.Right;
+            _msg = hud.Msg;
+            _hint = hud.Hint;
+            _hint.text = "Toca la pantalla para soltar la pieza justo encima de la torre.";
 
             BuildWorld();
-            _running = true;
-            StartAttempt();
+            RefreshTexts();
         }
 
         // ---------------- Mundo ----------------
@@ -71,176 +89,202 @@ namespace Antopia
         {
             _world = new GameObject("BuilderWorld").transform;
 
+            // Tarima de madera y aro de tierra en el solar.
+            Part("Ring", PrimitiveType.Sphere, new Vector3(Site.x, 0f, Site.z), new Vector3(6.4f, 0.06f, 6.4f), AntModel.Tint(new Color(0.46f, 0.33f, 0.21f)));
+            Part("Pallet", PrimitiveType.Cube, new Vector3(Site.x, BaseTop * 0.5f, Site.z), new Vector3(BaseWidth + 0.7f, BaseTop, Depth + 0.7f),
+                AntModel.Tint(new Color(0.42f, 0.29f, 0.18f), 0.15f));
+
+            // La constructora anima desde el suelo, junto a la torre.
             _ant = AntModel.Create("BuilderAnt", AntRoles.All[AntRoles.Constructora].Variant, _world);
-            _ant.localScale = Vector3.one * 0.9f;
-            _ant.position = NestView.NestEntrance + new Vector3(0f, 0f, -(DeliverRadius + 0.2f));
-            _run = new AntRunner(_ant);
-            _chase = new ChaseCam();
+            _ant.localScale = Vector3.one * 1.1f;
+            _ant.position = new Vector3(Site.x - 3.4f, 0f, Site.z - 1.4f);
+            _ant.rotation = Quaternion.LookRotation(new Vector3(Site.x, 0f, Site.z) - _ant.position);
 
-            _carryView = Part(_ant, PrimitiveType.Cube, "Carry", AntModel.CargoBase + Vector3.up * 0.08f,
-                new Vector3(0.5f, 0.3f, 0.45f), "Tuneles");
-            _carryView.gameObject.SetActive(false);
+            _cam = Camera.main;
+            if (_cam != null)
+            {
+                _camHome = _cam.transform.position;
+                _camHomeRot = _cam.transform.rotation;
+                _camHomeFov = _cam.fieldOfView;
+            }
 
-            _piece = Part(_world, PrimitiveType.Cube, "Piece", Vector3.zero, new Vector3(0.6f, 0.35f, 0.55f), "Tuneles");
-
-            _sitePos = FindSpot(_ant.position, 4f, 4f, 8f, 2f);
-            _site = new GameObject("Site").transform;
-            _site.SetParent(_world, false);
-            _site.position = _sitePos;
-            Part(_site, PrimitiveType.Cylinder, "Ring", new Vector3(0f, 0.02f, 0f), new Vector3(2.4f, 0.02f, 2.4f), "Camara");
+            NextMover();
         }
 
-        static Transform Part(Transform parent, PrimitiveType type, string name, Vector3 pos, Vector3 scale, string mat)
+        Transform Part(string name, PrimitiveType type, Vector3 pos, Vector3 scale, Material mat)
         {
-            var t = NestView.Prim(type, name, Vector3.zero, scale, mat).transform;
-            t.SetParent(parent, false);
-            t.localPosition = pos;
-            t.localScale = scale;
+            var t = NestView.Prim(type, name, pos, scale, "Ant").transform;
+            t.SetParent(_world, true);
+            t.GetComponent<MeshRenderer>().sharedMaterial = mat;
             return t;
         }
 
-        // Punto libre a al menos minFrom de "from", entre minNest y maxNest del nido.
-        static Vector3 FindSpot(Vector3 from, float minFrom, float minNest, float maxNest, float margin, Vector3? avoid = null, float minAvoid = 0f)
+        static Material BlockMaterial(int level) => AntModel.Tint(BlockColors[level % BlockColors.Length], 0.2f);
+
+        // Nueva pieza que se desliza sobre la torre, del ancho del ultimo piso.
+        void NextMover()
         {
-            for (int i = 0; i < 60; i++)
+            float y = BaseTop + (_floors + 0.5f) * Height;
+            _mover = Part("Block", PrimitiveType.Cube, new Vector3(Site.x, y, Site.z), new Vector3(_topW, Height, Depth), BlockMaterial(_floors));
+            _dir = _floors % 2 == 0 ? 1f : -1f;
+            _moverX = Site.x - _dir * Range;
+            _speed = Mathf.Min(2.4f + 0.38f * _floors, 6.2f);
+        }
+
+        // ---------------- Jugada ----------------
+        void Drop()
+        {
+            if (_ended || _mover == null) return;
+            float dx = _moverX - _topX;
+            float adx = Mathf.Abs(dx);
+            float y = BaseTop + (_floors + 0.5f) * Height;
+
+            if (adx >= _topW)
             {
-                var p = new Vector3(Random.Range(-WorldHalf + 2f, WorldHalf - 2f), 0f, Random.Range(-WorldHalf + 2f, WorldHalf - 2f));
-                float nest = Flat(p - NestView.NestEntrance).magnitude;
-                if (nest < minNest || nest > maxNest) continue;
-                if (!IsClear(p, margin)) continue;
-                if (Flat(p - from).magnitude < minFrom) continue;
-                if (avoid.HasValue && Flat(p - avoid.Value).magnitude < minAvoid) continue;
-                return p;
+                // Fallo total: la pieza cae y la obra termina.
+                SpawnDebris(_mover, Mathf.Sign(dx));
+                _mover = null;
+                Say("Se cayo la pieza!");
+                End(false);
+                return;
             }
-            return new Vector3(6f, 0f, 6f);
+
+            float newW = _topW;
+            float center = _topX;
+            if (adx <= Perfect)
+            {
+                _streak++;
+                _perfects++;
+                if (_streak >= 3) newW = Mathf.Min(BaseWidth, _topW + 0.25f); // racha: la torre recupera anchura
+                Say(_streak >= 3 ? "Perfecto! La torre se ensancha" : "Perfecto!");
+                _hopT = 0f;
+            }
+            else
+            {
+                _streak = 0;
+                newW = _topW - adx;
+                center = _topX + dx * 0.5f;
+                float sign = Mathf.Sign(dx);
+                // La parte que sobresale se corta y cae.
+                var cut = Part("Cut", PrimitiveType.Cube, new Vector3(_topX + sign * _topW * 0.5f + dx * 0.5f, y, Site.z),
+                    new Vector3(adx, Height, Depth), BlockMaterial(_floors));
+                SpawnDebris(cut, sign);
+            }
+
+            _mover.position = new Vector3(center, y, Site.z);
+            _mover.localScale = new Vector3(newW, Height, Depth);
+            _mover = null;
+            _topX = center;
+            _topW = newW;
+            _floors++;
+
+            if (_floors >= MaxFloors)
+            {
+                _complete = true;
+                Say("Torre completa!");
+                End(true);
+                return;
+            }
+            NextMover();
+            RefreshTexts();
         }
 
-        // ---------------- Intentos ----------------
-        void StartAttempt()
+        void SpawnDebris(Transform t, float sign)
         {
-            _carrying = false;
-            _carryView.gameObject.SetActive(false);
-            _piecePos = FindSpot(_ant.position, 5f, 3f, 11f, 1f, _sitePos, 5f);
-            _piece.position = _piecePos + Vector3.up * 0.18f;
-            _piece.gameObject.SetActive(true);
-
-            float dist = Flat(_piecePos - _ant.position).magnitude + Flat(_sitePos - _piecePos).magnitude;
-            float t = Game.BuildAttempts > 1 ? _attempt / (float)(Game.BuildAttempts - 1) : 0f;
-            _timeLeft = dist / Speed * Mathf.Lerp(2.4f, 1.6f, t) + 2f;
-            RefreshTimer();
-            RefreshInfo();
-            RefreshHint();
-        }
-
-        void PickUp()
-        {
-            _carrying = true;
-            _piece.gameObject.SetActive(false);
-            _carryView.gameObject.SetActive(true);
-            RefreshHint();
-        }
-
-        void Place()
-        {
-            var block = Part(_site, PrimitiveType.Cube, "Block", new Vector3(0f, 0.02f + BlockHeight * (_hits + 0.5f), 0f),
-                new Vector3(1.0f, BlockHeight, 1.0f), "Tuneles");
-            block.localRotation = Quaternion.Euler(0f, Random.Range(-12f, 12f), 0f);
-            _hits++;
-            Say("Pieza colocada");
-            NextAttempt();
-        }
-
-        void Fail()
-        {
-            Say("Se acabo el tiempo: pieza perdida");
-            NextAttempt();
-        }
-
-        void NextAttempt()
-        {
-            _attempt++;
-            if (_attempt >= Game.BuildAttempts) EndRound();
-            else StartAttempt();
+            _debris.Add(new Debris { t = t, vel = new Vector3(sign * 1.6f, 1.5f, 0f), spin = sign * -140f, life = 1.6f });
         }
 
         void Say(string text)
         {
             _msg.text = text;
-            _msgUntil = Time.time + 2f;
+            _msgUntil = Time.time + 1.6f;
+        }
+
+        // Para las capturas automaticas: suelta n piezas, alternando colocacion casi perfecta y con recorte.
+        internal void DebugAutoPlay(int n)
+        {
+            for (int i = 0; i < n && !_ended; i++)
+            {
+                _moverX = _topX + (i % 2 == 0 ? 0.04f : 0.55f);
+                Drop();
+            }
         }
 
         // ---------------- Bucle ----------------
-        void OnSwipe(Vector2 dir)
-        {
-            if (!_running) return;
-            bool wasMoving = _run.Moving;
-            _run.Steer(dir);
-            if (!wasMoving) RefreshHint();
-        }
-
         void Update()
         {
-            if (_running)
+            float dt = Time.deltaTime;
+            if (!_ended && _mover != null)
             {
-                _run.Move(Time.deltaTime);
-                if (_run.Moving) _timeLeft -= Time.deltaTime; // el reloj empieza con el primer deslizamiento
-                if (!_carrying && _run.Near(_piecePos, PickupRadius)) PickUp();
-                else if (_carrying && _run.Near(_sitePos, SiteRadius)) Place();
-                else if (_timeLeft <= 0f) Fail();
-                else if (Mathf.CeilToInt(_timeLeft) != _lastSecond) RefreshTimer();
+                _moverX += _dir * _speed * dt;
+                if (_moverX > Site.x + Range) { _moverX = Site.x + Range; _dir = -1f; }
+                else if (_moverX < Site.x - Range) { _moverX = Site.x - Range; _dir = 1f; }
+                _mover.position = new Vector3(_moverX, BaseTop + (_floors + 0.5f) * Height, Site.z);
             }
-            if (_piece.gameObject.activeSelf)
+
+            for (int i = _debris.Count - 1; i >= 0; i--)
             {
-                _piece.position = _piecePos + Vector3.up * (0.22f + 0.06f * Mathf.Sin(Time.time * 4f));
-                _piece.Rotate(0f, 60f * Time.deltaTime, 0f);
+                var d = _debris[i];
+                d.vel.y -= 14f * dt;
+                d.t.position += d.vel * dt;
+                d.t.Rotate(0f, 0f, d.spin * dt);
+                d.life -= dt;
+                if (d.life <= 0f)
+                {
+                    Destroy(d.t.gameObject);
+                    _debris.RemoveAt(i);
+                }
             }
+
+            // Saltito de alegria de la constructora al colocar bien.
+            if (_hopT < 1f)
+            {
+                _hopT = Mathf.Min(1f, _hopT + dt * 2.2f);
+                var p = _ant.position;
+                p.y = Mathf.Sin(_hopT * Mathf.PI) * 0.7f;
+                _ant.position = p;
+            }
+
             if (_msg.text.Length > 0 && Time.time > _msgUntil) _msg.text = "";
         }
 
+        // La camara sube con la torre mirandola en diagonal.
         void LateUpdate()
         {
-            _chase.Follow(_ant.position, Time.deltaTime);
-            if (!_running) _pointer.Hide();
-            else if (_carrying) _pointer.Show(_sitePos, new Color(0.62f, 0.35f, 0.70f));
-            else _pointer.Show(_piecePos, UiKit.Gold);
+            if (_cam == null) return;
+            var look = new Vector3(Site.x, TopY + 0.4f, Site.z);
+            var pos = look + new Vector3(0f, 7.6f, -11.5f);
+            float k = 1f - Mathf.Exp(-4f * Time.deltaTime);
+            _cam.transform.position = Vector3.Lerp(_cam.transform.position, pos, k);
+            var want = Quaternion.LookRotation(look - _cam.transform.position);
+            _cam.transform.rotation = Quaternion.Slerp(_cam.transform.rotation, want, k);
+            _cam.fieldOfView = Mathf.Lerp(_cam.fieldOfView, 56f, k);
         }
 
         // ---------------- UI ----------------
-        void RefreshTimer()
+        void RefreshTexts()
         {
-            _lastSecond = Mathf.CeilToInt(Mathf.Max(0f, _timeLeft));
-            _timer.text = $"Tiempo {_lastSecond}";
+            _left.text = $"Piso {_floors + (_ended ? 0 : 1)}/{MaxFloors}";
+            _center.text = $"Piezas {Pieces}";
+            _right.text = $"Perfectos {_perfects}";
         }
 
-        void RefreshInfo()
+        void End(bool complete)
         {
-            _info.text = $"Pieza {_attempt + 1} de {Game.BuildAttempts}";
-            _placedText.text = $"Colocadas: {_hits}";
-        }
-
-        void RefreshHint()
-        {
-            if (!_run.Moving) _hint.text = "Desliza el dedo para moverte. Coge la pieza y llevala al solar morado.";
-            else if (_carrying) _hint.text = "Llevala al circulo morado antes de que se acabe el tiempo.";
-            else _hint.text = "Ve a por la pieza (bloque gris).";
-        }
-
-        void EndRound()
-        {
-            _running = false;
-            _info.text = "Obra terminada";
-            _placedText.text = $"Colocadas: {_hits}";
-            _timer.text = "Fin";
-            string summary = _hits == Game.BuildAttempts
-                ? $"Perfecto: {Pieces} piezas (bonus +1)"
-                : $"Colocaste {Pieces} piezas de {Game.BuildAttempts}";
-            var panel = UiKit.Frame(_root, "Result", UiKit.Skin.Orange, 0.05f, 0.30f, 0.95f, 0.74f);
-            UiKit.Label(panel.transform, "Obra terminada", 54, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.72f, 0.95f, 0.98f);
-            UiKit.Label(panel.transform, summary, 44, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.30f, 0.95f, 0.72f);
+            _ended = true;
+            RefreshTexts();
+            _left.text = $"Pisos {_floors}/{MaxFloors}";
+            _hint.text = complete ? "Obra terminada. Recoge tus piezas." : "La torre ha caido. Recoge las piezas que conseguiste.";
+            string summary = complete
+                ? $"Torre completa: {_floors} pisos\n{Pieces} piezas (bonus +{CompleteBonus})"
+                : $"Torre de {_floors} pisos\n{Pieces} piezas";
+            var panel = UiKit.Frame(_root, "Result", UiKit.Skin.Green, 0.05f, 0.30f, 0.95f, 0.74f);
+            UiKit.Label(panel.transform, "Obra terminada", 50, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.72f, 0.95f, 0.98f);
+            UiKit.Label(panel.transform, summary, 42, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.30f, 0.95f, 0.72f);
             UiKit.MakeButton(panel.transform, "Recoger", UiKit.Gold, 54, Finish, 0.25f, 0.05f, 0.75f, 0.26f);
         }
 
-        // Al salir antes de tiempo se conservan las piezas ya colocadas.
+        // Al salir antes de tiempo se conservan las piezas ya levantadas.
         void Finish()
         {
             Game.CompleteBuild(Pieces);
@@ -251,7 +295,12 @@ namespace Antopia
         void OnDestroy()
         {
             if (_world != null) Destroy(_world.gameObject);
-            _chase?.Restore();
+            if (_cam != null)
+            {
+                _cam.transform.position = _camHome;
+                _cam.transform.rotation = _camHomeRot;
+                _cam.fieldOfView = _camHomeFov;
+            }
         }
     }
 }

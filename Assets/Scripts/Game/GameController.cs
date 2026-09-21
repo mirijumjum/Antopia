@@ -1,15 +1,19 @@
 using System;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
 namespace Antopia
 {
     // Punto de entrada: monta la escena, el HUD y los paneles. Se crea desde una escena casi vacia.
+    // Pantalla principal: recursos arriba, el mundo en el centro y abajo un unico boton grande de jugar con
+    // cuatro accesos redondos. Los paneles (Nido, Diarias) son tarjetas sobre un marco a pantalla casi completa.
     public class GameController : MonoBehaviour
     {
         RectTransform _safe, _actions;
-        Text _coins, _leaves, _twigs, _pieces, _ants, _toast;
-        Button _dailyBtn, _playBtn, _sellBtn;
+        Text _coins, _leaves, _twigs, _pieces, _toast, _playTitle, _playSub, _sellCaption, _badgeText;
+        Button _playBtn;
+        GameObject _badge;
         GameObject _overlay;
         Action<RectTransform> _overlayBuild;
         float _toastUntil;
@@ -20,6 +24,7 @@ namespace Antopia
             Application.targetFrameRate = 60;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Game.Load();
+            ShotRunner.StartIfRequested();
             UiKit.CreateCanvas(out _safe);
             BuildHud();
             gameObject.AddComponent<NestView>();
@@ -55,8 +60,8 @@ namespace Antopia
 
         void Update()
         {
-            if (_toast != null && _toast.gameObject.activeSelf && Time.time > _toastUntil)
-                _toast.gameObject.SetActive(false);
+            if (_toast != null && _toast.transform.parent.gameObject.activeSelf && Time.time > _toastUntil)
+                _toast.transform.parent.gameObject.SetActive(false);
 
             _dayCheck += Time.deltaTime;
             if (_dayCheck > 30f)
@@ -69,59 +74,90 @@ namespace Antopia
         // ---------------- HUD ----------------
         void BuildHud()
         {
-            UiKit.Box(_safe, "HudBg", new Color(0.12f, 0.09f, 0.06f, 0.85f), 0f, 0.915f, 1f, 1f);
-            _coins = UiKit.Label(_safe, "", 42, TextAnchor.MiddleCenter, UiKit.Gold, 0.00f, 0.955f, 0.25f, 1f);
-            _leaves = UiKit.Label(_safe, "", 42, TextAnchor.MiddleCenter, UiKit.Leaf, 0.25f, 0.955f, 0.50f, 1f);
-            _twigs = UiKit.Label(_safe, "", 42, TextAnchor.MiddleCenter, new Color(0.85f, 0.62f, 0.38f), 0.50f, 0.955f, 0.75f, 1f);
-            _pieces = UiKit.Label(_safe, "", 42, TextAnchor.MiddleCenter, UiKit.Cream, 0.75f, 0.955f, 1f, 1f);
-            _ants = UiKit.Label(_safe, "", 34, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.915f, 0.95f, 0.955f);
+            // Recursos: una sola barra con cuatro indicadores (icono + cifra).
+            UiKit.Pill(_safe, "HudBg", 0.78f, 0.03f, 0.925f, 0.97f, 0.985f);
+            _coins = HudStat(0, "Icon47", Color.white);
+            _leaves = HudStat(1, "Btn08", Color.white);
+            _twigs = HudStat(2, "Btn06", new Color(0.85f, 0.62f, 0.45f));
+            _pieces = HudStat(3, "Btn10", Color.white);
 
-            var toastBg = UiKit.Box(_safe, "ToastBg", new Color(0f, 0f, 0f, 0.6f), 0.05f, 0.84f, 0.95f, 0.91f);
-            toastBg.raycastTarget = false;
-            _toast = UiKit.Label(toastBg.transform, "", 36, TextAnchor.MiddleCenter, UiKit.Cream, 0.02f, 0f, 0.98f, 1f);
-            _toast.gameObject.SetActive(false);
+            var toastBg = UiKit.Pill(_safe, "ToastBg", 0.85f, 0.10f, 0.86f, 0.90f, 0.915f);
+            _toast = UiKit.Label(toastBg.transform, "", 30, TextAnchor.MiddleCenter, UiKit.Cream, 0.03f, 0f, 0.97f, 1f);
+            toastBg.gameObject.SetActive(false);
 
+            // Abajo: un boton principal y cuatro accesos redondos.
             _actions = UiKit.Rect(_safe, "Actions", 0f, 0f, 1f, 1f);
-            _playBtn = UiKit.MakeButton(_actions, "", UiKit.Leaf, 46, PlaySelectedRole, 0.03f, 0.14f, 0.66f, 0.27f, "Icon37");
-            UiKit.MakeButton(_actions, "Hormigas\n(cambiar rol)", UiKit.Cream, 42, OpenRoles, 0.68f, 0.14f, 0.97f, 0.27f, "Icon03");
-            UiKit.MakeButton(_actions, "Nido\n(mejoras)", UiKit.Cream, 42, OpenNest, 0.03f, 0.01f, 0.34f, 0.13f, "Icon02");
-            _dailyBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, OpenDaily, 0.35f, 0.01f, 0.66f, 0.13f, "Icon08");
-            _sellBtn = UiKit.MakeButton(_actions, "", UiKit.Gold, 42, () =>
+            _playBtn = UiKit.MakeBigButton(_actions, UiKit.Leaf, "Icon37", PlaySelectedRole,
+                0.06f, 0.145f, 0.94f, 0.255f, out _playTitle, out _playSub);
+
+            DockButton(0, "Icon09", "Nido", () => OpenNest(0));
+            DockButton(1, "Icon10", "Hormigas", OpenRoles);
+            DockButton(2, "Icon08", "Diarias", OpenDaily);
+            _sellCaption = DockButton(3, "Icon54", "Vender", () =>
             {
                 int gain = Game.Data.leaves * Game.LeafPrice;
                 Game.SellLeaves();
                 if (gain > 0) Toast($"Vendiste hojas por {gain} monedas", 3f);
-            }, 0.67f, 0.01f, 0.97f, 0.13f, "Icon54");
+            });
+
+            // Aviso rojo sobre "Diarias" cuando hay premios listos.
+            float cx = DockX(2);
+            var badge = UiKit.Icon(_actions, "Btn07", Color.white, cx + 0.035f, 0.105f, cx + 0.115f, 0.15f);
+            _badge = badge.gameObject;
+            _badgeText = UiKit.Outlined(UiKit.Label(badge.transform, "", 30, TextAnchor.MiddleCenter, Color.white, 0f, 0f, 1f, 1f));
+        }
+
+        Text HudStat(int i, string icon, Color tint)
+        {
+            float x0 = 0.03f + i * 0.235f;
+            UiKit.Icon(_safe, icon, tint, x0 + 0.015f, 0.93f, x0 + 0.09f, 0.98f);
+            var t = UiKit.Label(_safe, "", 40, TextAnchor.MiddleCenter, UiKit.Cream, x0 + 0.09f, 0.925f, x0 + 0.235f, 0.985f);
+            t.fontStyle = FontStyle.Bold;
+            return t;
+        }
+
+        static float DockX(int i) => 0.14f + i * 0.24f;
+
+        Text DockButton(int i, string icon, string caption, UnityAction onClick)
+        {
+            float cx = DockX(i);
+            UiKit.IconButton(_actions, icon, onClick, cx - 0.10f, 0.05f, cx + 0.10f, 0.135f);
+            return UiKit.Outlined(UiKit.Label(_actions, caption, 28, TextAnchor.MiddleCenter, UiKit.Cream, cx - 0.12f, 0.012f, cx + 0.12f, 0.055f));
         }
 
         void RefreshHud()
         {
             var d = Game.Data;
-            _coins.text = $"Monedas\n{d.coins}";
-            _leaves.text = $"Hojas\n{d.leaves}";
-            _twigs.text = $"Ramas\n{d.twigs}";
-            _pieces.text = $"Piezas\n{d.pieces}";
-            _ants.text = $"Hormigas pasivas: {Game.Ants}   Hoja = {Game.LeafPrice} mon.";
+            _coins.text = d.coins.ToString();
+            _leaves.text = d.leaves.ToString();
+            _twigs.text = d.twigs.ToString();
+            _pieces.text = d.pieces.ToString();
+
             var role = AntRoles.All[d.role];
             UiKit.SetButtonColor(_playBtn, role.Ui);
-            UiKit.SetButtonText(_playBtn, d.role == AntRoles.Constructora
-                ? $"JUGAR: {role.Name}\nconstruir ({Game.BuildTwigCost} ramas)"
-                : $"JUGAR: {role.Name}\n{(role.HasGame ? role.Verb : "modo de prueba")}");
+            _playTitle.text = "JUGAR";
+            _playSub.text = d.role == AntRoles.Constructora
+                ? $"{role.Name}  -  construir ({Game.BuildTwigCost} ramas)"
+                : $"{role.Name}  -  {(role.HasGame ? role.Verb : "modo de prueba")}";
+
             int pending = Game.DailyPending();
-            UiKit.SetButtonText(_dailyBtn, pending > 0 ? $"Diarias\n(!) {pending} listas" : "Diarias");
-            UiKit.SetButtonText(_sellBtn, $"Vender\nhojas ({d.leaves * Game.LeafPrice})");
+            _badge.SetActive(pending > 0);
+            _badgeText.text = pending.ToString();
+            _sellCaption.text = d.leaves > 0 ? $"Vender ({d.leaves * Game.LeafPrice})" : "Vender";
             if (_overlay != null && _overlayBuild != null) RebuildOverlay();
         }
+
+        void HideToast() => _toast.transform.parent.gameObject.SetActive(false);
 
         void Toast(string msg, float seconds)
         {
             _toast.text = msg;
-            _toast.gameObject.SetActive(true);
+            _toast.transform.parent.gameObject.SetActive(true);
             _toastUntil = Time.time + seconds;
         }
 
         // ---------------- Roles ----------------
-        void PlayRole(int role)
+        internal void PlayRole(int role)
         {
             switch (role)
             {
@@ -133,9 +169,10 @@ namespace Antopia
 
         void PlaySelectedRole() => PlayRole(Game.Data.role);
 
-        void OpenRoles()
+        internal void OpenRoles()
         {
             CloseOverlay();
+            HideToast();
             _actions.gameObject.SetActive(false);
             RoleScreen.Open(_safe, PlayRole, () => _actions.gameObject.SetActive(true));
         }
@@ -143,6 +180,7 @@ namespace Antopia
         void OpenRoam(int role)
         {
             CloseOverlay();
+            HideToast();
             _actions.gameObject.SetActive(false);
             RoamGame.Open(_safe, role, () => _actions.gameObject.SetActive(true));
         }
@@ -151,6 +189,7 @@ namespace Antopia
         void OpenForager()
         {
             CloseOverlay();
+            HideToast();
             _actions.gameObject.SetActive(false); // deja ver el mundo durante la expedicion
             ForagerGame.Open(_safe, () =>
             {
@@ -167,6 +206,7 @@ namespace Antopia
                 Toast($"Necesitas {Game.BuildTwigCost} ramas. Recolectalas con la obrera.", 4f);
                 return;
             }
+            HideToast();
             _actions.gameObject.SetActive(false);
             BuilderGame.Open(_safe, () =>
             {
@@ -187,7 +227,7 @@ namespace Antopia
             if (_overlay != null) Destroy(_overlay);
             var rt = UiKit.Rect(_safe, "Overlay", 0f, 0f, 1f, 0.915f);
             _overlay = rt.gameObject;
-            UiKit.Frame(rt, "Bg", UiKit.Skin.Orange, 0, 0, 1, 1);
+            UiKit.Frame(rt, "Bg", UiKit.Skin.Green, 0, 0, 1, 1);
             _overlayBuild(rt);
         }
 
@@ -198,95 +238,106 @@ namespace Antopia
             _overlayBuild = null;
         }
 
-        void OpenNest() => OpenNest(0);
+        // Titulo y boton redondo de cerrar, iguales en todos los paneles.
+        void PanelHeader(RectTransform rt, string title)
+        {
+            UiKit.Label(rt, title, 56, TextAnchor.MiddleCenter, UiKit.Cream, 0.14f, 0.895f, 0.86f, 0.98f).fontStyle = FontStyle.Bold;
+            UiKit.IconButton(rt, "Icon78", CloseOverlay, 0.83f, 0.895f, 0.96f, 0.975f);
+        }
+
+        // Tarjeta oscura donde va una mejora o una tarea.
+        RectTransform Card(RectTransform rt, float top, float height)
+        {
+            return UiKit.Pill(rt, "Card", 0.55f, 0.05f, top - height, 0.95f, top).rectTransform;
+        }
+
+        // Nombre y descripcion a la izquierda, accion a la derecha.
+        void CardTexts(RectTransform card, string name, string detail, int nameSize, int detailSize)
+        {
+            UiKit.Label(card, name, nameSize, TextAnchor.MiddleLeft, UiKit.Gold, 0.06f, 0.58f, 0.60f, 0.96f).fontStyle = FontStyle.Bold;
+            UiKit.Label(card, detail, detailSize, TextAnchor.UpperLeft, UiKit.Cream, 0.06f, 0.08f, 0.60f, 0.60f);
+        }
 
         // tab 0 = edificios del nido (monedas + piezas), tab 1 = mejoras de la obrera (monedas + ramas).
-        void OpenNest(int tab)
+        internal void OpenNest(int tab)
         {
             OpenOverlay(rt =>
             {
-                UiKit.MakeButton(rt, "Edificios", tab == 0 ? UiKit.Gold : UiKit.Disabled, 46, () => OpenNest(0), 0.04f, 0.90f, 0.49f, 0.99f);
-                UiKit.MakeButton(rt, "Obrera", tab == 1 ? UiKit.Gold : UiKit.Disabled, 46, () => OpenNest(1), 0.51f, 0.90f, 0.96f, 0.99f);
-                UiKit.Label(rt, tab == 0
-                        ? "Cuestan monedas (vende hojas) y piezas (la constructora las hace)."
-                        : "Cuestan monedas y ramas. Mejoran la expedicion de la obrera.",
-                    34, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.85f, 0.95f, 0.90f);
-                if (tab == 0) BuildBuildingRows(rt);
-                else BuildForageRows(rt);
-                UiKit.MakeButton(rt, "Cerrar", UiKit.Cream, 46, CloseOverlay, 0.3f, 0.02f, 0.7f, 0.10f);
+                PanelHeader(rt, "Nido");
+                UiKit.MakeButton(rt, "Edificios", tab == 0 ? UiKit.Leaf : UiKit.Cream, 38, () => OpenNest(0), 0.06f, 0.80f, 0.49f, 0.88f);
+                UiKit.MakeButton(rt, "Obrera", tab == 1 ? UiKit.Leaf : UiKit.Cream, 38, () => OpenNest(1), 0.51f, 0.80f, 0.94f, 0.88f);
+                if (tab == 0) BuildBuildingCards(rt);
+                else BuildForageCards(rt);
             });
         }
 
-        void BuildBuildingRows(RectTransform rt)
+        void BuildBuildingCards(RectTransform rt)
         {
             for (int i = 0; i < 3; i++)
             {
                 int b = i;
-                float top = 0.83f - i * 0.24f;
-                var row = UiKit.Box(rt, "Row", new Color(1f, 1f, 1f, 0.08f), 0.04f, top - 0.22f, 0.96f, top);
+                var card = Card(rt, 0.775f - i * 0.255f, 0.235f);
                 int lvl = Game.Data.buildingLevels[b];
-                UiKit.Label(row.transform, $"{Game.BuildingNames[b]}  (nivel {lvl}/{Game.MaxLevel})", 46,
-                    TextAnchor.MiddleLeft, UiKit.Gold, 0.04f, 0.62f, 0.96f, 0.98f);
-                UiKit.Label(row.transform, Game.BuildingEffect(b), 34, TextAnchor.MiddleLeft, UiKit.Cream,
-                    0.04f, 0.38f, 0.96f, 0.64f);
+                CardTexts(card, Game.BuildingNames[b], $"Nivel {lvl}/{Game.MaxLevel}\n{Game.BuildingEffect(b)}", 50, 32);
                 bool max = lvl >= Game.MaxLevel;
-                string cost = max ? "Nivel maximo" : $"Mejorar: {Game.UpgradeCoinCost(b)} mon. + {Game.UpgradePieceCost(b)} piezas";
-                UiKit.MakeButton(row.transform, cost, Game.CanUpgrade(b) ? UiKit.Gold : UiKit.Disabled, 36, () =>
+                string cost = max ? "Nivel\nmaximo" : $"Mejorar\n{Game.UpgradeCoinCost(b)} mon. + {Game.UpgradePieceCost(b)} pz.";
+                UiKit.MakeButton(card, cost, max || !Game.CanUpgrade(b) ? UiKit.Disabled : UiKit.Gold, 32, () =>
                 {
                     if (Game.TryUpgrade(b)) Toast($"{Game.BuildingNames[b]} sube de nivel", 3f);
                     else Toast("Te faltan monedas o piezas", 3f);
-                }, 0.04f, 0.04f, 0.96f, 0.36f);
+                }, 0.62f, 0.20f, 0.97f, 0.80f);
             }
         }
 
-        void BuildForageRows(RectTransform rt)
+        void BuildForageCards(RectTransform rt)
         {
             for (int i = 0; i < Game.ForageUpgradeNames.Length; i++)
             {
                 int u = i;
-                float top = 0.83f - i * 0.185f;
-                var row = UiKit.Box(rt, "Row", new Color(1f, 1f, 1f, 0.08f), 0.04f, top - 0.17f, 0.96f, top);
+                var card = Card(rt, 0.775f - i * 0.19f, 0.175f);
                 int lvl = Game.Data.forageLevels[u];
-                UiKit.Label(row.transform, $"{Game.ForageUpgradeNames[u]}  (nivel {lvl}/{Game.ForageMaxLevel})", 42,
-                    TextAnchor.MiddleLeft, UiKit.Gold, 0.04f, 0.64f, 0.96f, 0.98f);
-                UiKit.Label(row.transform, Game.ForageEffect(u), 32, TextAnchor.MiddleLeft, UiKit.Cream,
-                    0.04f, 0.36f, 0.96f, 0.64f);
+                CardTexts(card, Game.ForageUpgradeNames[u], $"Nivel {lvl}/{Game.ForageMaxLevel}\n{Game.ForageEffect(u)}", 42, 28);
                 bool max = lvl >= Game.ForageMaxLevel;
-                string cost = max ? "Nivel maximo" : $"Mejorar: {Game.ForageCoinCost(u)} mon. + {Game.ForageTwigCost(u)} ramas";
-                UiKit.MakeButton(row.transform, cost, Game.CanUpgradeForage(u) ? UiKit.Gold : UiKit.Disabled, 34, () =>
+                string cost = max ? "Nivel\nmaximo" : $"Mejorar\n{Game.ForageCoinCost(u)} mon. + {Game.ForageTwigCost(u)} ramas";
+                UiKit.MakeButton(card, cost, max || !Game.CanUpgradeForage(u) ? UiKit.Disabled : UiKit.Gold, 28, () =>
                 {
                     if (Game.TryUpgradeForage(u)) Toast($"{Game.ForageUpgradeNames[u]} sube de nivel", 3f);
                     else Toast("Te faltan monedas o ramas", 3f);
-                }, 0.04f, 0.03f, 0.96f, 0.34f);
+                }, 0.60f, 0.16f, 0.97f, 0.84f);
             }
         }
 
-        void OpenDaily()
+        internal void OpenDaily()
         {
             Game.RefreshDay();
             OpenOverlay(rt =>
             {
-                UiKit.Label(rt, "TAREAS DIARIAS", 60, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.90f, 0.95f, 0.99f);
-                UiKit.Label(rt, "Se reinician cada dia. Unos 40 minutos de juego las completan.",
-                    34, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.85f, 0.95f, 0.90f);
+                PanelHeader(rt, "Diarias");
                 for (int i = 0; i < 3; i++)
                 {
                     int t = i;
-                    float top = 0.83f - i * 0.24f;
-                    var row = UiKit.Box(rt, "Row", new Color(1f, 1f, 1f, 0.08f), 0.04f, top - 0.22f, 0.96f, top);
-                    UiKit.Label(row.transform, Game.DailyTitles[t], 40, TextAnchor.MiddleLeft, UiKit.Cream,
-                        0.04f, 0.62f, 0.96f, 0.98f);
-                    UiKit.Label(row.transform, $"Progreso: {Game.DailyProgress(t)} / {Game.DailyTargets[t]}", 38,
-                        TextAnchor.MiddleLeft, UiKit.Gold, 0.04f, 0.38f, 0.96f, 0.64f);
+                    var card = Card(rt, 0.86f - i * 0.28f, 0.255f);
+                    UiKit.Label(card, Game.DailyTitles[t], 38, TextAnchor.MiddleLeft, UiKit.Cream, 0.06f, 0.48f, 0.60f, 0.96f);
+
+                    // Barra de progreso: fondo oscuro y relleno verde.
+                    float frac = Mathf.Clamp01(Game.DailyProgress(t) / (float)Game.DailyTargets[t]);
+                    UiKit.Pill(card, "Bar", 0.9f, 0.06f, 0.16f, 0.48f, 0.38f);
+                    if (frac > 0f)
+                    {
+                        var fill = UiKit.Icon(card, "Progress03", Color.white, 0.065f, 0.18f, 0.065f + 0.405f * frac, 0.36f);
+                        fill.preserveAspect = false;
+                        fill.type = Image.Type.Sliced;
+                    }
+                    UiKit.Label(card, $"{Game.DailyProgress(t)}/{Game.DailyTargets[t]}", 34, TextAnchor.MiddleLeft, UiKit.Gold, 0.50f, 0.12f, 0.62f, 0.42f);
+
                     bool claimed = Game.Data.dailyClaimed[t];
                     bool ready = Game.DailyDone(t) && !claimed;
-                    string txt = claimed ? "Reclamado" : ready ? $"Reclamar {Game.DailyRewards[t]} monedas" : $"Premio: {Game.DailyRewards[t]} monedas";
-                    UiKit.MakeButton(row.transform, txt, ready ? UiKit.Gold : UiKit.Disabled, 38, () =>
+                    string txt = claimed ? "Reclamado" : ready ? $"Reclamar\n{Game.DailyRewards[t]} mon." : $"Premio\n{Game.DailyRewards[t]} mon.";
+                    UiKit.MakeButton(card, txt, ready ? UiKit.Leaf : UiKit.Disabled, 32, () =>
                     {
                         if (Game.ClaimDaily(t)) Toast($"+{Game.DailyRewards[t]} monedas", 3f);
-                    }, 0.04f, 0.04f, 0.96f, 0.36f);
+                    }, 0.63f, 0.20f, 0.97f, 0.80f);
                 }
-                UiKit.MakeButton(rt, "Cerrar", UiKit.Cream, 46, CloseOverlay, 0.3f, 0.02f, 0.7f, 0.10f);
             });
         }
     }

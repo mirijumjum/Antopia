@@ -72,3 +72,7 @@ Desktop.ini
 # Local temp/logs
 .utmp/
 build.log
+
+# Capturas y logs de desarrollo
+/Shots/
+shots_build.log

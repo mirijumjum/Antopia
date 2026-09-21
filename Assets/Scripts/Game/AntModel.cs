@@ -3,57 +3,71 @@ using UnityEngine;
 
 namespace Antopia
 {
-    // Modelo 3D de hormiga hecho con primitivas, copiado de la hoja de sprites Ants.png:
-    // cabeza pequena con antenas acodadas, torax, cintura fina, abdomen grande y seis patas articuladas.
-    // Mira hacia +Z y apoya las patas en y = 0. Las patas las anima AntRig.
+    // Hormiga 3D "cute" hecha con primitivas: cabeza grande y redonda con ojos brillantes, mofletes y sonrisa,
+    // cuerpo pequeno con una franja clara, antenas con bolitas y patitas cortas. Cada rol lleva un accesorio
+    // (brote, casco de obra, casco de soldado, sombrero de exploradora). Mira hacia +Z y apoya las patas en y = 0.
+    // Las patas las anima AntRig.
     public static class AntModel
     {
         public const int Brown = 0, Red = 1, Green = 2, Black = 3;
 
-        // Colores tomados de las cuatro variantes de la imagen.
+        // Un color vivo por rol.
         static readonly Color[] Palette =
         {
-            new Color(0.55f, 0.34f, 0.27f),
-            new Color(0.62f, 0.17f, 0.10f),
-            new Color(0.36f, 0.42f, 0.07f),
-            new Color(0.24f, 0.24f, 0.27f),
+            new Color(0.76f, 0.51f, 0.34f), // marron
+            new Color(0.92f, 0.32f, 0.26f), // rojo
+            new Color(0.60f, 0.80f, 0.30f), // verde
+            new Color(0.36f, 0.38f, 0.50f), // pizarra
         };
 
-        // Donde apoyar la carga (encima del torax) y su tamano.
-        public static readonly Vector3 CargoBase = new Vector3(0f, 0.5f, -0.05f);
+        // Donde apoyar la carga (encima del abdomen).
+        public static readonly Vector3 CargoBase = new Vector3(0f, 0.66f, -0.30f);
 
-        static readonly Dictionary<Color, Material> Cache = new Dictionary<Color, Material>();
+        static readonly Dictionary<(Color, float), Material> Cache = new Dictionary<(Color, float), Material>();
 
         public static Transform Create(string name, int variant, Transform parent)
         {
-            var color = Palette[variant % Palette.Length];
-            var body = Tint(color);
-            var head = Tint(color * 0.85f);
-            var dark = Tint(new Color(0.10f, 0.08f, 0.07f));
+            variant = Mathf.Abs(variant) % Palette.Length;
+            var color = Palette[variant];
+            var body = Tint(color, 0.45f);
+            var light = Tint(Color.Lerp(color, Color.white, 0.45f), 0.45f);
+            var limb = Tint(color * 0.55f, 0.3f);
+            var ink = Tint(new Color(0.10f, 0.08f, 0.10f), 0.6f);
+            var white = Tint(new Color(1f, 1f, 1f), 0.6f);
+            var blush = Tint(new Color(1f, 0.60f, 0.66f), 0.2f);
 
             var root = new GameObject(name).transform;
             root.SetParent(parent, false);
 
-            Part(root, PrimitiveType.Sphere, "Head", new Vector3(0f, 0.30f, 0.46f), new Vector3(0.26f, 0.24f, 0.28f), head);
-            Part(root, PrimitiveType.Sphere, "Thorax", new Vector3(0f, 0.29f, 0.12f), new Vector3(0.28f, 0.26f, 0.40f), body);
-            Part(root, PrimitiveType.Sphere, "Waist", new Vector3(0f, 0.30f, -0.12f), new Vector3(0.12f, 0.12f, 0.14f), dark);
-            Part(root, PrimitiveType.Sphere, "Abdomen", new Vector3(0f, 0.31f, -0.42f), new Vector3(0.40f, 0.36f, 0.56f), body);
+            // Cuerpo: cabeza grande, torax pequeno y abdomen redondo con una franja clara.
+            Part(root, PrimitiveType.Sphere, "Head", new Vector3(0f, 0.44f, 0.50f), new Vector3(0.70f, 0.64f, 0.66f), body);
+            Part(root, PrimitiveType.Sphere, "Thorax", new Vector3(0f, 0.30f, 0.04f), new Vector3(0.36f, 0.34f, 0.40f), body);
+            Part(root, PrimitiveType.Sphere, "Abdomen", new Vector3(0f, 0.36f, -0.40f), new Vector3(0.58f, 0.52f, 0.64f), body);
+            Part(root, PrimitiveType.Sphere, "Stripe", new Vector3(0f, 0.36f, -0.42f), new Vector3(0.60f, 0.14f, 0.66f), light);
 
+            // Cara: ojos grandes con brillo, mofletes y sonrisa.
             foreach (float side in new[] { -1f, 1f })
             {
-                // Antenas acodadas y mandibulas.
-                Bar(root, new Vector3(side * 0.05f, 0.38f, 0.56f), new Vector3(side * 0.10f, 0.52f, 0.72f), 0.03f, dark);
-                Bar(root, new Vector3(side * 0.10f, 0.52f, 0.72f), new Vector3(side * 0.20f, 0.48f, 0.90f), 0.03f, dark);
-                Bar(root, new Vector3(side * 0.06f, 0.26f, 0.58f), new Vector3(side * 0.02f, 0.24f, 0.70f), 0.04f, dark);
-            }
+                Part(root, PrimitiveType.Sphere, "Eye", new Vector3(side * 0.17f, 0.50f, 0.77f), Vector3.one * 0.24f, white);
+                Part(root, PrimitiveType.Sphere, "Pupil", new Vector3(side * 0.17f, 0.50f, 0.875f), Vector3.one * 0.13f, ink);
+                Part(root, PrimitiveType.Sphere, "Shine", new Vector3(side * 0.145f, 0.545f, 0.935f), Vector3.one * 0.05f, white);
+                Part(root, PrimitiveType.Sphere, "Cheek", new Vector3(side * 0.28f, 0.36f, 0.72f), new Vector3(0.11f, 0.07f, 0.05f), blush);
 
-            // Seis patas: delantera, media y trasera a cada lado, con la marcha de trinca (alternando tres y tres).
+                // Antena corta con bolita en la punta.
+                Bar(root, new Vector3(side * 0.14f, 0.70f, 0.62f), new Vector3(side * 0.25f, 0.93f, 0.74f), 0.05f, limb);
+                Part(root, PrimitiveType.Sphere, "Bulb", new Vector3(side * 0.25f, 0.95f, 0.75f), Vector3.one * 0.12f, light);
+            }
+            Part(root, PrimitiveType.Sphere, "Smile", new Vector3(0f, 0.34f, 0.815f), new Vector3(0.10f, 0.03f, 0.03f), ink);
+
+            AddAccessory(root, variant);
+
+            // Seis patitas cortas y gorditas con marcha de trinca (alternando tres y tres).
             var pivots = new Transform[6];
             var sides = new float[6];
             var yaws = new float[6];
             var phases = new float[6];
-            float[] zs = { 0.28f, 0.12f, -0.04f };
-            float[] splay = { 35f, 0f, -35f };
+            float[] zs = { 0.20f, 0.03f, -0.14f };
+            float[] splay = { 30f, 0f, -30f };
             int n = 0;
             for (int row = 0; row < 3; row++)
             {
@@ -61,10 +75,12 @@ namespace Antopia
                 {
                     var pivot = new GameObject("Leg").transform;
                     pivot.SetParent(root, false);
-                    pivot.localPosition = new Vector3(side * 0.08f, 0.22f, zs[row]);
-                    var knee = new Vector3(side * 0.20f, 0.14f, 0f);
-                    Bar(pivot, Vector3.zero, knee, 0.045f, dark);
-                    Bar(pivot, knee, new Vector3(side * 0.38f, -0.20f, 0f), 0.04f, dark);
+                    pivot.localPosition = new Vector3(side * 0.10f, 0.22f, zs[row]);
+                    var knee = new Vector3(side * 0.15f, 0.08f, 0f);
+                    var foot = new Vector3(side * 0.23f, -0.19f, 0f);
+                    Bar(pivot, Vector3.zero, knee, 0.075f, limb);
+                    Bar(pivot, knee, foot, 0.07f, limb);
+                    Part(pivot, PrimitiveType.Sphere, "Foot", foot, Vector3.one * 0.11f, limb);
                     pivots[n] = pivot;
                     sides[n] = side;
                     yaws[n] = -side * splay[row];
@@ -77,14 +93,59 @@ namespace Antopia
             return root;
         }
 
-        // Material propio con el color pedido, copiando el shader del material Ant.
-        static Material Tint(Color color)
+        // Un detalle por rol sobre la cabeza.
+        static void AddAccessory(Transform root, int variant)
         {
-            if (Cache.TryGetValue(color, out var cached) && cached != null) return cached;
+            var top = new Vector3(0f, 0.72f, 0.46f);
+            switch (variant)
+            {
+                case Red: // obrera: brote de dos hojitas
+                {
+                    var leaf = Tint(new Color(0.42f, 0.78f, 0.30f), 0.4f);
+                    Bar(root, top, top + new Vector3(0f, 0.10f, -0.02f), 0.04f, leaf);
+                    var l = Part(root, PrimitiveType.Sphere, "Leaf", top + new Vector3(-0.09f, 0.14f, -0.02f), new Vector3(0.20f, 0.04f, 0.10f), leaf);
+                    l.localRotation = Quaternion.Euler(0f, 0f, 25f);
+                    var r = Part(root, PrimitiveType.Sphere, "Leaf", top + new Vector3(0.09f, 0.14f, -0.02f), new Vector3(0.20f, 0.04f, 0.10f), leaf);
+                    r.localRotation = Quaternion.Euler(0f, 0f, -25f);
+                    break;
+                }
+                case Black: // constructora: casco de obra amarillo
+                {
+                    var hat = Tint(new Color(1f, 0.80f, 0.18f), 0.5f);
+                    Part(root, PrimitiveType.Sphere, "Hat", top + new Vector3(0f, -0.02f, -0.02f), new Vector3(0.52f, 0.34f, 0.52f), hat);
+                    Part(root, PrimitiveType.Cylinder, "Brim", top + new Vector3(0f, -0.10f, 0.02f), new Vector3(0.60f, 0.02f, 0.60f), hat);
+                    Part(root, PrimitiveType.Cube, "Ridge", top + new Vector3(0f, 0.08f, -0.02f), new Vector3(0.05f, 0.05f, 0.40f), Tint(new Color(0.95f, 0.65f, 0.10f), 0.5f));
+                    break;
+                }
+                case Brown: // soldado: casco de acero con penacho
+                {
+                    var steel = Tint(new Color(0.66f, 0.70f, 0.78f), 0.7f);
+                    Part(root, PrimitiveType.Sphere, "Helmet", top + new Vector3(0f, -0.03f, -0.02f), new Vector3(0.54f, 0.38f, 0.54f), steel);
+                    Part(root, PrimitiveType.Cylinder, "Rim", top + new Vector3(0f, -0.12f, 0.02f), new Vector3(0.58f, 0.03f, 0.58f), steel);
+                    Part(root, PrimitiveType.Sphere, "Plume", top + new Vector3(0f, 0.16f, -0.10f), new Vector3(0.09f, 0.16f, 0.26f), Tint(new Color(0.90f, 0.25f, 0.25f), 0.4f));
+                    break;
+                }
+                default: // exploradora: sombrero de ala ancha
+                {
+                    var straw = Tint(new Color(0.90f, 0.74f, 0.42f), 0.3f);
+                    Part(root, PrimitiveType.Cylinder, "Brim", top + new Vector3(0f, -0.09f, 0f), new Vector3(0.86f, 0.02f, 0.86f), straw);
+                    Part(root, PrimitiveType.Sphere, "Crown", top + new Vector3(0f, 0f, -0.02f), new Vector3(0.44f, 0.30f, 0.44f), straw);
+                    Part(root, PrimitiveType.Cylinder, "Band", top + new Vector3(0f, -0.06f, -0.02f), new Vector3(0.46f, 0.03f, 0.46f), Tint(new Color(0.75f, 0.30f, 0.25f), 0.4f));
+                    break;
+                }
+            }
+        }
+
+        // Material propio con el color pedido, copiando el shader del material Ant.
+        internal static Material Tint(Color color, float smoothness = 0.1f)
+        {
+            var key = (color, smoothness);
+            if (Cache.TryGetValue(key, out var cached) && cached != null) return cached;
             var baseMat = Resources.Load<Material>("Materials/Ant");
             var m = baseMat != null ? new Material(baseMat) : new Material(Shader.Find("Universal Render Pipeline/Lit"));
             m.SetColor("_BaseColor", color);
-            Cache[color] = m;
+            m.SetFloat("_Smoothness", smoothness);
+            Cache[key] = m;
             return m;
         }
 

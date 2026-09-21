@@ -13,11 +13,11 @@ namespace Antopia
         // Un hueco por rol: delante izquierda/derecha y detras izquierda/derecha.
         static readonly Vector3[] Cells =
         {
-            new Vector3(-1.8f, 0f, -1.5f), new Vector3(1.8f, 0f, -1.5f),
-            new Vector3(-1.8f, 0f, 1.5f), new Vector3(1.8f, 0f, 1.5f),
+            new Vector3(-1.7f, 0f, -1.2f), new Vector3(1.7f, 0f, -1.2f),
+            new Vector3(-1.7f, 0f, 1.5f), new Vector3(1.7f, 0f, 1.5f),
         };
         // Zona de la pantalla (fracciones de este panel) donde se ve el escenario.
-        const float X0 = 0.04f, Y0 = 0.42f, X1 = 0.96f, Y1 = 0.87f;
+        const float X0 = 0.05f, Y0 = 0.38f, X1 = 0.95f, Y1 = 0.885f;
         const float SelectedScale = 1.3f;
 
         RectTransform _root;
@@ -37,7 +37,7 @@ namespace Antopia
             go.transform.SetParent(parent, false);
             var rt = go.GetComponent<RectTransform>();
             rt.anchorMin = Vector2.zero;
-            rt.anchorMax = new Vector2(1f, 0.915f); // deja visible el HUD de arriba
+            rt.anchorMax = new Vector2(1f, 0.915f); // deja visible la barra de recursos
             rt.offsetMin = rt.offsetMax = Vector2.zero;
             var s = go.AddComponent<RoleScreen>();
             s.Build(rt, onPlay, onClose);
@@ -50,10 +50,9 @@ namespace Antopia
             _onPlay = onPlay;
             _onClose = onClose;
 
-            UiKit.Frame(root, "Bg", UiKit.Skin.Cyan, 0f, 0f, 1f, 1f);
-            UiKit.Label(root, "HORMIGAS: elige rol", 56, TextAnchor.MiddleCenter, UiKit.Cream, 0.05f, 0.92f, 0.95f, 0.99f);
-            UiKit.Label(root, "Cada color es un rol distinto. Toca una hormiga para elegirla.", 32, TextAnchor.MiddleCenter,
-                UiKit.Cream, 0.05f, 0.88f, 0.95f, 0.92f);
+            UiKit.Frame(root, "Bg", UiKit.Skin.Green, 0f, 0f, 1f, 1f);
+            UiKit.Label(root, "Hormigas", 56, TextAnchor.MiddleCenter, UiKit.Cream, 0.14f, 0.895f, 0.86f, 0.98f).fontStyle = FontStyle.Bold;
+            UiKit.IconButton(root, "Icon78", Close, 0.83f, 0.895f, 0.96f, 0.975f);
 
             BuildStage();
             var raw = UiKit.Rect(root, "Stage", X0, Y0, X1, Y1).gameObject.AddComponent<RawImage>();
@@ -61,26 +60,28 @@ namespace Antopia
             raw.raycastTarget = false;
             BuildCellButtons();
 
-            var detail = UiKit.Box(root, "Detail", new Color(1f, 1f, 1f, 0.08f), 0.04f, 0.22f, 0.96f, 0.40f);
-            _roleName = UiKit.Label(detail.transform, "", 48, TextAnchor.MiddleLeft, UiKit.Gold, 0.04f, 0.58f, 0.96f, 0.98f);
-            _roleDesc = UiKit.Label(detail.transform, "", 32, TextAnchor.UpperLeft, UiKit.Cream, 0.04f, 0.04f, 0.96f, 0.60f);
+            var detail = UiKit.Pill(root, "Detail", 0.55f, 0.05f, 0.16f, 0.95f, 0.35f);
+            _roleName = UiKit.Label(detail.transform, "", 44, TextAnchor.MiddleLeft, UiKit.Gold, 0.05f, 0.62f, 0.95f, 0.98f);
+            _roleName.fontStyle = FontStyle.Bold;
+            _roleDesc = UiKit.Label(detail.transform, "", 28, TextAnchor.UpperLeft, UiKit.Cream, 0.05f, 0.06f, 0.95f, 0.64f);
 
-            _play = UiKit.MakeButton(root, "", UiKit.Gold, 42, () =>
+            _play = UiKit.MakeButton(root, "", UiKit.Leaf, 44, () =>
             {
                 int role = _selected;
                 _onClose?.Invoke();
                 _onPlay?.Invoke(role);
                 Destroy(gameObject);
-            }, 0.04f, 0.06f, 0.64f, 0.20f);
-            UiKit.MakeButton(root, "Volver", UiKit.Cream, 46, () =>
-            {
-                _onClose?.Invoke();
-                Destroy(gameObject);
-            }, 0.68f, 0.06f, 0.96f, 0.20f);
+            }, 0.06f, 0.03f, 0.94f, 0.13f, "Icon37");
 
             Select(Mathf.Clamp(Game.Data.role, 0, AntRoles.All.Length - 1));
             _ring.position = Origin + Cells[_selected];
             _ants[_selected].localScale = Vector3.one * SelectedScale;
+        }
+
+        void Close()
+        {
+            _onClose?.Invoke();
+            Destroy(gameObject);
         }
 
         void BuildStage()
@@ -88,8 +89,10 @@ namespace Antopia
             _stage = new GameObject("RoleStage").transform;
             _stage.position = Origin;
 
-            var floor = NestView.Prim(PrimitiveType.Cylinder, "Floor", Origin + new Vector3(0f, -0.03f, 0f), new Vector3(9f, 0.05f, 9f), "Ground");
+            // Suelo de hierba con la misma textura que el mundo.
+            var floor = NestView.Prim(PrimitiveType.Plane, "Floor", Origin, Vector3.one * 4f, "Ground");
             floor.transform.SetParent(_stage, true);
+            floor.GetComponent<MeshRenderer>().sharedMaterial = WorldDecor.GroundMaterial(40f);
             _ring = NestView.Prim(PrimitiveType.Cylinder, "Ring", Origin + Cells[0], new Vector3(2.4f, 0.02f, 2.4f), "Despensa").transform;
             _ring.SetParent(_stage, true);
 
@@ -111,15 +114,15 @@ namespace Antopia
 
             var camGo = new GameObject("RoleCam");
             camGo.transform.SetParent(_stage, false);
-            camGo.transform.localPosition = new Vector3(0f, 6f, -8f);
+            camGo.transform.localPosition = new Vector3(0f, 5.4f, -6.8f);
             _cam = camGo.AddComponent<Camera>();
             _cam.targetTexture = _rt;
             _cam.clearFlags = CameraClearFlags.SolidColor;
-            _cam.backgroundColor = new Color(0.22f, 0.17f, 0.12f);
+            _cam.backgroundColor = new Color(0.55f, 0.78f, 0.9f);
             _cam.fieldOfView = 40f;
             _cam.nearClipPlane = 0.3f;
-            _cam.farClipPlane = 60f;
-            _cam.transform.LookAt(Origin + new Vector3(0f, 0.2f, 0f));
+            _cam.farClipPlane = 80f;
+            _cam.transform.LookAt(Origin + new Vector3(0f, 0.2f, 0.1f));
         }
 
         // Botones transparentes sobre cada hormiga, colocados proyectando su posicion 3D en la pantalla.
@@ -140,10 +143,9 @@ namespace Antopia
                 var btn = img.gameObject.AddComponent<Button>();
                 btn.targetGraphic = img;
                 btn.onClick.AddListener(() => Select(idx));
-                UiKit.Box(_root, "NameBg", new Color(0f, 0f, 0f, 0.5f), c.x - halfW * 0.9f, c.y - halfH, c.x + halfW * 0.9f, c.y - halfH + 0.04f)
-                    .raycastTarget = false;
-                UiKit.Label(_root, AntRoles.All[i].Name, 32, TextAnchor.MiddleCenter, UiKit.Cream,
-                    c.x - halfW * 0.9f, c.y - halfH, c.x + halfW * 0.9f, c.y - halfH + 0.04f);
+                var name = UiKit.Outlined(UiKit.Label(_root, AntRoles.All[i].Name, 32, TextAnchor.MiddleCenter, UiKit.Cream,
+                    c.x - halfW, c.y - halfH, c.x + halfW, c.y - halfH + 0.045f));
+                name.fontStyle = FontStyle.Bold;
             }
         }
 

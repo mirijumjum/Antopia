@@ -94,6 +94,95 @@ namespace Antopia
             return t;
         }
 
+        static Sprite _circle, _ring;
+
+        // Circulo (relleno o solo aro) generado en codigo, con borde suave.
+        public static Sprite CircleSprite(bool ring)
+        {
+            if (ring ? _ring != null : _circle != null) return ring ? _ring : _circle;
+            const int N = 128;
+            var tex = new Texture2D(N, N, TextureFormat.RGBA32, false) { filterMode = FilterMode.Bilinear, wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[N * N];
+            float r = N * 0.5f - 2f;
+            for (int y = 0; y < N; y++)
+            {
+                for (int x = 0; x < N; x++)
+                {
+                    float d = Vector2.Distance(new Vector2(x + 0.5f, y + 0.5f), new Vector2(N * 0.5f, N * 0.5f));
+                    float a = Mathf.Clamp01(r - d);
+                    if (ring) a = Mathf.Min(a, Mathf.Clamp01(d - (r - 8f))) * 0.9f;
+                    px[y * N + x] = new Color(1f, 1f, 1f, a);
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            var sprite = Sprite.Create(tex, new Rect(0, 0, N, N), new Vector2(0.5f, 0.5f), 100f);
+            if (ring) _ring = sprite; else _circle = sprite;
+            return sprite;
+        }
+
+        // Contorno oscuro para que el texto se lea sobre el mundo 3D.
+        public static Text Outlined(Text t)
+        {
+            var o = t.gameObject.AddComponent<Outline>();
+            o.effectColor = new Color(0.08f, 0.06f, 0.03f, 0.9f);
+            o.effectDistance = new Vector2(2f, -2f);
+            return t;
+        }
+
+        // Barra redondeada oscura: fondo de indicadores, tarjetas y barras de progreso.
+        public static Image Pill(Transform parent, string name, float alpha, float xMin, float yMin, float xMax, float yMax)
+        {
+            var img = Box(parent, name, new Color(1f, 1f, 1f, alpha), xMin, yMin, xMax, yMax);
+            var sprite = LoadSprite("SliderBar_ProgressBar");
+            if (sprite != null)
+            {
+                img.sprite = sprite;
+                img.type = Image.Type.Sliced;
+            }
+            else img.color = new Color(0.10f, 0.08f, 0.06f, alpha);
+            img.raycastTarget = false;
+            return img;
+        }
+
+        // Imagen suelta de un sprite de Resources/UI (icono, gema, relleno de barra).
+        public static Image Icon(Transform parent, string sprite, Color tint, float xMin, float yMin, float xMax, float yMax)
+        {
+            var img = Box(parent, "Icon", tint, xMin, yMin, xMax, yMax);
+            img.sprite = LoadSprite(sprite);
+            img.preserveAspect = true;
+            img.raycastTarget = false;
+            return img;
+        }
+
+        // Boton que es el propio icono (los iconos del pack ya son botones brillantes con dibujo).
+        public static Button IconButton(Transform parent, string sprite, UnityAction onClick, float xMin, float yMin, float xMax, float yMax)
+        {
+            var img = Box(parent, "IconButton", Color.white, xMin, yMin, xMax, yMax);
+            img.sprite = LoadSprite(sprite);
+            img.preserveAspect = true;
+            var btn = img.gameObject.AddComponent<Button>();
+            btn.targetGraphic = img;
+            var colors = btn.colors;
+            colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
+            btn.colors = colors;
+            btn.onClick.AddListener(onClick);
+            return btn;
+        }
+
+        // Boton grande con titulo y subtitulo.
+        public static Button MakeBigButton(Transform parent, Color color, string icon, UnityAction onClick,
+            float xMin, float yMin, float xMax, float yMax, out Text title, out Text subtitle)
+        {
+            var btn = MakeButton(parent, "", color, 30, onClick, xMin, yMin, xMax, yMax, icon);
+            var label = btn.GetComponentInChildren<Text>();
+            label.gameObject.SetActive(false);
+            title = Outlined(Label(btn.transform, "", 60, TextAnchor.MiddleCenter, Color.white, 0.25f, 0.44f, 0.98f, 0.96f));
+            subtitle = Outlined(Label(btn.transform, "", 30, TextAnchor.MiddleCenter, Color.white, 0.25f, 0.08f, 0.98f, 0.50f));
+            title.fontStyle = FontStyle.Bold;
+            return btn;
+        }
+
         // Aspecto de los botones y marcos: cada color del juego se traduce a una variante del pack de UI.
         public enum Skin { Cyan, Purple, Green, Orange, Red }
 
@@ -172,7 +261,7 @@ namespace Antopia
         {
             var img = (Image)b.targetGraphic;
             bool disabled = color == Disabled;
-            var sprite = LoadSprite(ButtonSprites[(int)SkinFor(disabled ? Gold : color)]);
+            var sprite = LoadSprite(ButtonSprites[(int)(disabled ? Skin.Cyan : SkinFor(color))]);
             if (sprite == null)
             {
                 img.color = color;
@@ -180,7 +269,7 @@ namespace Antopia
             }
             img.sprite = sprite;
             img.type = Image.Type.Sliced;
-            img.color = disabled ? new Color(0.45f, 0.45f, 0.45f, 1f) : Color.white;
+            img.color = disabled ? new Color(0.55f, 0.60f, 0.64f, 1f) : Color.white;
         }
 
         public static void SetButtonText(Button b, string text)
